@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("./supabase");
+const { getFigmaFileKey } = require("./figma");
 
 const app = express();
 app.use(express.json());
@@ -46,16 +47,17 @@ app.get("/figma-projects", requireUser, async (req, res) => {
 
 app.post("/figma-projects", requireUser, async (req, res) => {
   const {
-    file_key,
     file_url,
     file_name,
     selected_frame_id,
     cached_properties,
   } = req.body;
 
-  if (!file_key || !file_url) {
+  const file_key = getFigmaFileKey(file_url);
+
+  if (!file_url || !file_key) {
     return res.status(400).json({
-      error: "file_key and file_url are required",
+      error: "A valid Figma URL is required",
     });
   }
 
