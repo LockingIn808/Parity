@@ -1,5 +1,5 @@
 import PillButton from "./PillButton";
-import type { Change } from "../types/changes";
+import type { Change } from "../global";
 
 interface Props {
   change: Change;

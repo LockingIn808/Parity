@@ -4,18 +4,11 @@ import ScoreBreakdown from "../components/ScoreBreakdown";
 import ChangesList from "../components/ChangesList";
 import ChatInput from "../components/ChatInput";
 import {
+  DESIGN_CATEGORIES,
   DESIGN_CHANGES,
   DESIGN_CHANGES_BY_CATEGORY,
-} from "../data/changes";
-import type { Category } from "../types/design";
-
-// Mock data. The backend will supply real scores later.
-const CATEGORIES: Category[] = [
-  { label: "Fonts",   score: 44, value: 0, color: "#5B8DF7" },
-  { label: "Color",   score: 48, value: 0, color: "#9370F0" },
-  { label: "Spacing", score: 32, value: 0, color: "#FFC85C" },
-  { label: "Sizing",  score: 64, value: 0, color: "#FF8A8F" },
-];
+  type Category,
+} from "../global";
 
 export default function DesignComparison() {
   const [selected, setSelected] = useState<Category | null>(null);
@@ -25,11 +18,11 @@ export default function DesignComparison() {
     : DESIGN_CHANGES;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <ConnectionStatus link="figma.com/file/XYZ" />
       <ScoreBreakdown
         title="Design Comparison"
-        categories={CATEGORIES}
+        categories={DESIGN_CATEGORIES}
         centerLabel="Similar"
         selected={selected}
         onSelect={setSelected}

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Category } from "../types/design";
+import type { Category } from "../global";
 
 interface Props {
   segments: Category[];
@@ -14,8 +14,8 @@ interface Props {
 export default function PieChart({
   segments,
   onSelect,
-  size = 165,
-  thickness = 28,
+  size = 140,
+  thickness = 22,
   gap = 3,
   track = true,
   children,
@@ -62,7 +62,7 @@ export default function PieChart({
           return slice;
         })}
       </svg>
-      <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-lg font-bold leading-tight text-gray-900">
+      <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-base font-bold leading-tight text-gray-900">
         {children}
       </div>
     </div>

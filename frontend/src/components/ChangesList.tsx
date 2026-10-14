@@ -1,5 +1,5 @@
 import ChangeItem from "./ChangeItem";
-import type { Change } from "../types/changes";
+import type { Change } from "../global";
 
 interface Props {
   changes: Change[];
@@ -13,7 +13,7 @@ export default function ChangesList({ changes, onPreview, onCommit }: Props) {
       <h3 className="mb-2 text-base font-semibold text-gray-900">
         Changes to Prioritize
       </h3>
-      <ul className="max-h-48 overflow-y-auto">
+      <ul className="max-h-40 overflow-y-auto">
         {changes.map((c) => (
           <ChangeItem
             key={c.id}

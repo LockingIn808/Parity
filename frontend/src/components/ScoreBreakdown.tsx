@@ -1,6 +1,6 @@
 import PieChart from "./PieChart";
 import Legend from "./Legend";
-import type { Category } from "../types/design";
+import type { Category } from "../global";
 
 interface Props {
   title: string;
@@ -10,6 +10,9 @@ interface Props {
   onSelect: (c: Category | null) => void;
 }
 
+const PIE_SIZE = 140;
+const PIE_THICKNESS = 22;
+
 export default function ScoreBreakdown({
   title,
   categories,
@@ -17,7 +20,7 @@ export default function ScoreBreakdown({
   selected,
   onSelect,
 }: Props) {
-  // Each category fills at most 1/N of the overview pie (25 when there are four)
+  // Each category fills at most 1/N of the overview pie
   const maxPerCategory = 100 / categories.length;
 
   const overviewSegments: Category[] = categories.map((c) => ({
@@ -29,16 +32,26 @@ export default function ScoreBreakdown({
     overviewSegments.reduce((sum, c) => sum + c.value, 0)
   );
 
-  // Detail view: same height as the overview so the page doesn't jump
+  // Detail view: same fixed height as the overview so the page doesn't jump
   if (selected) {
     return (
-      <div className="relative h-[181px]">
+      <div className="relative h-[150px]">
         <h2 className="absolute left-0 top-0 text-xl font-bold text-gray-900">
           {selected.label}
         </h2>
-        <div className="mx-auto mt-4 w-[165px] max-w-full">
-          <PieChart segments={[{ ...selected, value: selected.score ?? 0 }]}>
-            <span>{selected.score}%<br />{centerLabel}</span>
+        <div
+          className="mx-auto flex h-full items-center justify-center"
+          style={{ width: PIE_SIZE, maxWidth: "100%" }}
+        >
+          <PieChart
+            segments={[{ ...selected, value: selected.score ?? 0 }]}
+            size={PIE_SIZE}
+            thickness={PIE_THICKNESS}
+          >
+            <span>
+              {selected.score}%<br />
+              {centerLabel}
+            </span>
           </PieChart>
         </div>
         <button
@@ -55,14 +68,22 @@ export default function ScoreBreakdown({
 
   // Overview: title + legend on the left, pie on the right
   return (
-    <div className="flex h-[181px] items-center justify-between gap-4">
-      <div className="space-y-5">
+    <div className="flex h-[150px] items-center justify-between gap-4">
+      <div className="space-y-3">
         <h2 className="text-xl font-bold text-gray-900">{title}</h2>
         <Legend items={overviewSegments} onSelect={onSelect} />
       </div>
-      <div className="mt-4 w-[165px] max-w-[45%] shrink-0">
-        <PieChart segments={overviewSegments} onSelect={onSelect}>
-          <span>{overall}%<br />{centerLabel}</span>
+      <div className="shrink-0" style={{ width: PIE_SIZE, maxWidth: "45%" }}>
+        <PieChart
+          segments={overviewSegments}
+          onSelect={onSelect}
+          size={PIE_SIZE}
+          thickness={PIE_THICKNESS}
+        >
+          <span>
+            {overall}%<br />
+            {centerLabel}
+          </span>
         </PieChart>
       </div>
     </div>

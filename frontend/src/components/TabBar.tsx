@@ -1,12 +1,8 @@
 import logo from "../assets/ParityLogo.png";
-
-interface Tab {
-  id: string;
-  label: string;
-}
+import type { TabItem } from "../global";
 
 interface Props {
-  tabs: Tab[];
+  tabs: TabItem[];
   active: string;
   onChange: (id: string) => void;
   showLogo?: boolean; // logo above the tabs (default on)

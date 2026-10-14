@@ -1,4 +1,4 @@
-import type { Category } from "../types/design";
+import type { Category } from "../global";
 
 interface Props {
   items: Category[];
@@ -7,7 +7,7 @@ interface Props {
 
 export default function Legend({ items, onSelect }: Props) {
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-2">
       {items.map((item) => (
         <li key={item.label}>
           <button

@@ -2,12 +2,7 @@ import { useState } from "react";
 import TabBar from "./components/TabBar";
 import DesignComparison from "./pages/DesignComparison";
 import AccessibilityScore from "./pages/AccessibilityScore";
-
-const TABS = [
-  { id: "figma", label: "Figma Link" },
-  { id: "design", label: "Design" },
-  { id: "accessibility", label: "Accessibility" },
-];
+import { TABS } from "./global";
 
 export default function App() {
   const [tab, setTab] = useState("design");
