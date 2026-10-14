@@ -29,12 +29,14 @@ export default function ScoreBreakdown({
     overviewSegments.reduce((sum, c) => sum + c.value, 0)
   );
 
-  // Detail view: one category, legend hidden
+  // Detail view: same height as the overview so the page doesn't jump
   if (selected) {
     return (
-      <div className="relative space-y-2">
-        <h2 className="text-xl font-bold text-gray-900">{selected.label}</h2>
-        <div className="mx-auto w-[165px] max-w-full">
+      <div className="relative h-[181px]">
+        <h2 className="absolute left-0 top-0 text-xl font-bold text-gray-900">
+          {selected.label}
+        </h2>
+        <div className="mx-auto mt-4 w-[165px] max-w-full">
           <PieChart segments={[{ ...selected, value: selected.score ?? 0 }]}>
             <span>{selected.score}%<br />{centerLabel}</span>
           </PieChart>
@@ -53,7 +55,7 @@ export default function ScoreBreakdown({
 
   // Overview: title + legend on the left, pie on the right
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex h-[181px] items-center justify-between gap-4">
       <div className="space-y-5">
         <h2 className="text-xl font-bold text-gray-900">{title}</h2>
         <Legend items={overviewSegments} onSelect={onSelect} />
