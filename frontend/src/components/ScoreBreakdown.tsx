@@ -32,23 +32,21 @@ export default function ScoreBreakdown({
   // Detail view: one category, legend hidden
   if (selected) {
     return (
-      <div className="space-y-4">
+      <div className="relative space-y-2">
         <h2 className="text-xl font-bold text-gray-900">{selected.label}</h2>
         <div className="mx-auto w-[165px] max-w-full">
           <PieChart segments={[{ ...selected, value: selected.score ?? 0 }]}>
             <span>{selected.score}%<br />{centerLabel}</span>
           </PieChart>
         </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => onSelect(null)}
-            aria-label="Back"
-            className="grid h-10 w-10 cursor-pointer place-items-center rounded-full bg-violet-500 text-white"
-          >
-            ←
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          aria-label="Back"
+          className="absolute bottom-0 right-0 grid h-10 w-10 cursor-pointer place-items-center rounded-full bg-violet-500 text-white"
+        >
+          ←
+        </button>
       </div>
     );
   }
