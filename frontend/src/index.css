@@ -1,1 +1,16 @@
 @import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+
+body {
+  width: 560px;
+  margin: 0;
+  font-family: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+}
+
+/* ombré background from the Figma: peach glow top-left, periwinkle bottom-right */
+.parity-bg {
+  background:
+    radial-gradient(circle at 0% 0%, #ffd8be 0%, rgba(255, 216, 190, 0) 45%),
+    radial-gradient(circle at 100% 100%, #b8b8ff 0%, rgba(184, 184, 255, 0) 55%),
+    #f8f7ff;
+}

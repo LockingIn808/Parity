@@ -1,3 +1,4 @@
+
 // ============ Types ============
 export interface Category {
   label: string;
@@ -15,6 +16,11 @@ export interface Change {
 export interface TabItem {
   id: string;
   label: string;
+}
+
+export interface User {
+  name: string;
+  photoUrl?: string; // profile picture URL; falls back to the first initial
 }
 
 // ============ Constants ============

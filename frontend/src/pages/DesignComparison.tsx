@@ -1,5 +1,4 @@
 import { useState } from "react";
-import ConnectionStatus from "../components/ConnectionStatus";
 import ScoreBreakdown from "../components/ScoreBreakdown";
 import ChangesList from "../components/ChangesList";
 import ChatInput from "../components/ChatInput";
@@ -19,7 +18,6 @@ export default function DesignComparison() {
 
   return (
     <div className="space-y-4">
-      <ConnectionStatus link="figma.com/file/XYZ" />
       <ScoreBreakdown
         title="Design Comparison"
         categories={DESIGN_CATEGORIES}
