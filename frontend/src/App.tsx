@@ -9,7 +9,7 @@ import logo from "./assets/ParityLogo.png";
 import { TABS, type User } from "./global";
 
 // Mock signed-in user. Replace with the real one once sign-in works.
-const USER: User = { name: "Preet" };
+const USER: User = { name: "User" };
 
 export default function App() {
   const [tab, setTab] = useState("figma");
