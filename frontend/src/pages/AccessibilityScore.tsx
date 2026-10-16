@@ -1,7 +1,6 @@
 import { useState } from "react";
 import ScoreBreakdown from "../components/ScoreBreakdown";
 import ChangesList from "../components/ChangesList";
-import ChatInput from "../components/ChatInput";
 import {
   ACCESSIBILITY_CATEGORIES,
   ACCESSIBILITY_CHANGES,
@@ -17,7 +16,7 @@ export default function AccessibilityScore() {
     : ACCESSIBILITY_CHANGES;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <ScoreBreakdown
         title="Accessibility Score"
         categories={ACCESSIBILITY_CATEGORIES}
@@ -26,7 +25,6 @@ export default function AccessibilityScore() {
         onSelect={setSelected}
       />
       <ChangesList changes={changes} />
-      <ChatInput />
     </div>
   );
 }

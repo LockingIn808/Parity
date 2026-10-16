@@ -1,7 +1,6 @@
 import { useState } from "react";
 import ScoreBreakdown from "../components/ScoreBreakdown";
 import ChangesList from "../components/ChangesList";
-import ChatInput from "../components/ChatInput";
 import {
   DESIGN_CATEGORIES,
   DESIGN_CHANGES,
@@ -17,7 +16,7 @@ export default function DesignComparison() {
     : DESIGN_CHANGES;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <ScoreBreakdown
         title="Design Comparison"
         categories={DESIGN_CATEGORIES}
@@ -26,7 +25,6 @@ export default function DesignComparison() {
         onSelect={setSelected}
       />
       <ChangesList changes={changes} />
-      <ChatInput />
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import PieChart from "./PieChart";
 import Legend from "./Legend";
-import type { Category } from "../global";
+import type { Category } from "../types/design";
+
+const VIEW_HEIGHT = 140;
+const CHART_SIZE = 120;
 
 interface Props {
   title: string;
@@ -10,9 +13,6 @@ interface Props {
   onSelect: (c: Category | null) => void;
 }
 
-const PIE_SIZE = 140;
-const PIE_THICKNESS = 22;
-
 export default function ScoreBreakdown({
   title,
   categories,
@@ -20,7 +20,6 @@ export default function ScoreBreakdown({
   selected,
   onSelect,
 }: Props) {
-  // Each category fills at most 1/N of the overview pie
   const maxPerCategory = 100 / categories.length;
 
   const overviewSegments: Category[] = categories.map((c) => ({
@@ -32,23 +31,19 @@ export default function ScoreBreakdown({
     overviewSegments.reduce((sum, c) => sum + c.value, 0)
   );
 
-  // Detail view: same fixed height as the overview so the page doesn't jump
   if (selected) {
     return (
-      <div className="relative h-[150px]">
-        <h2 className="absolute left-0 top-0 text-xl font-bold text-gray-900">
+      <div className="relative" style={{ height: VIEW_HEIGHT }}>
+        <h2 className="absolute left-0 top-0 text-base font-bold text-gray-900">
           {selected.label}
         </h2>
-        <div
-          className="mx-auto flex h-full items-center justify-center"
-          style={{ width: PIE_SIZE, maxWidth: "100%" }}
-        >
+        <div className="mx-auto mt-2" style={{ width: CHART_SIZE }}>
           <PieChart
             segments={[{ ...selected, value: selected.score ?? 0 }]}
-            size={PIE_SIZE}
-            thickness={PIE_THICKNESS}
+            size={CHART_SIZE}
+            thickness={22}
           >
-            <span>
+            <span className="text-sm">
               {selected.score}%<br />
               {centerLabel}
             </span>
@@ -58,7 +53,7 @@ export default function ScoreBreakdown({
           type="button"
           onClick={() => onSelect(null)}
           aria-label="Back"
-          className="absolute bottom-0 right-0 grid h-10 w-10 cursor-pointer place-items-center rounded-full bg-violet-500 text-white"
+          className="absolute bottom-0 right-0 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-[#5748CC] text-white"
         >
           ←
         </button>
@@ -66,21 +61,23 @@ export default function ScoreBreakdown({
     );
   }
 
-  // Overview: title + legend on the left, pie on the right
   return (
-    <div className="flex h-[150px] items-center justify-between gap-4">
+    <div
+      className="flex items-center justify-between gap-4"
+      style={{ height: VIEW_HEIGHT }}
+    >
       <div className="space-y-3">
-        <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
         <Legend items={overviewSegments} onSelect={onSelect} />
       </div>
-      <div className="shrink-0" style={{ width: PIE_SIZE, maxWidth: "45%" }}>
+      <div className="shrink-0" style={{ width: CHART_SIZE }}>
         <PieChart
           segments={overviewSegments}
           onSelect={onSelect}
-          size={PIE_SIZE}
-          thickness={PIE_THICKNESS}
+          size={CHART_SIZE}
+          thickness={22}
         >
-          <span>
+          <span className="text-sm">
             {overall}%<br />
             {centerLabel}
           </span>

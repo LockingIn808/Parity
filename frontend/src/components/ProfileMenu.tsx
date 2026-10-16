@@ -83,7 +83,7 @@ export default function ProfileMenu({ user, onSignOut, onToggleTheme }: Props) {
         aria-label="Profile menu"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="grid h-10 w-10 cursor-pointer place-items-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-[#9381FF] to-[#5748CC] text-sm font-bold text-white shadow-[0_4px_12px_rgba(87,72,204,0.25)] hover:opacity-90"
+        className="grid h-8 w-8 cursor-pointer place-items-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-[#9381FF] to-[#5748CC] text-sm font-bold text-white shadow-[0_4px_12px_rgba(87,72,204,0.25)] hover:opacity-90"
       >
         {user.photoUrl ? (
           <img
@@ -99,7 +99,7 @@ export default function ProfileMenu({ user, onSignOut, onToggleTheme }: Props) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-12 z-20 w-56 rounded-2xl border border-[#E3E0FF] bg-white p-2 shadow-[0_12px_32px_rgba(87,72,204,0.18)]"
+          className="absolute right-0 top-10 z-20 w-56 rounded-2xl border border-[#E3E0FF] bg-white p-2 shadow-[0_12px_32px_rgba(87,72,204,0.18)]"
         >
           <p className="truncate px-3 pb-2 pt-1 text-xs font-semibold text-slate-500">
             {user.name}
