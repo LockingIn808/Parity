@@ -4,6 +4,7 @@
   "name": "Parity",
   "version": "1.0.0",
   "description": "Compare your web implementation against your Figma design.",
+  "permissions": ["identity"],
   "action": {
     "default_title": "Parity"
   },
