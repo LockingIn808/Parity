@@ -1,70 +1,61 @@
-import type { Change } from "../types/changes";
+import type { Report } from "../types/design";
 
-const BLUE = "#5B8DF7";
-const PURPLE = "#9370F0";
-const YELLOW = "#FFC85C";
-const RED = "#FF8A8F";
+const P1 = "#5A32C6", P2 = "#8F72F0", P3 = "#B7A3F5", P4 = "#EFB87A", P5 = "#F7D9B4";
 
-// Design Comparison, overview
-export const DESIGN_CHANGES: Change[] = [
-  { id: "d1", label: "Fonts are different", color: BLUE },
-  { id: "d2", label: "Spacing in headings", color: YELLOW },
-  { id: "d3", label: "Difference in Color Palette", color: PURPLE },
-  { id: "d4", label: "Sizing mismatch", color: RED },
-];
-
-// Design Comparison, one category selected
-export const DESIGN_CHANGES_BY_CATEGORY: Record<string, Change[]> = {
-  Fonts: [
-    { id: "df1", label: "Change #1", color: BLUE },
-    { id: "df2", label: "Change #2", color: BLUE },
-    { id: "df3", label: "Change #3", color: BLUE },
+export const design: Report = {
+  key: "design",
+  title: "Design Comparison",
+  goodLabel: "Similar",
+  remainderLabel: "Still different",
+  detailRemainderLabel: "Different",
+  parts: [
+    { id: "fonts",   name: "Fonts",   share: 14, weight: 30, color: P1, fixLabel: "Font change" },
+    { id: "color",   name: "Color",   share: 12, weight: 25, color: P2, fixLabel: "Color change" },
+    { id: "spacing", name: "Spacing", share: 8,  weight: 20, color: P3, fixLabel: "Spacing change" },
+    { id: "sizing",  name: "Sizing",  share: 13, weight: 25, color: P4, fixLabel: "Sizing change" },
   ],
-  Color: [
-    { id: "dc1", label: "Change #1", color: PURPLE },
-    { id: "dc2", label: "Change #2", color: PURPLE },
-    { id: "dc3", label: "Change #3", color: PURPLE },
-  ],
-  Spacing: [
-    { id: "ds1", label: "Change #1", color: YELLOW },
-    { id: "ds2", label: "Change #2", color: YELLOW },
-    { id: "ds3", label: "Change #3", color: YELLOW },
-  ],
-  Sizing: [
-    { id: "dz1", label: "Change #1", color: RED },
-    { id: "dz2", label: "Change #2", color: RED },
-    { id: "dz3", label: "Change #3", color: RED },
+  changes: [
+    { id: "d1",  title: "Fonts are different",        priority: "High priority",   partId: "fonts" },
+    { id: "d2",  title: "Spacing in headings",        priority: "Medium priority", partId: "spacing" },
+    { id: "d3",  title: "Difference in color palette", priority: "Medium priority", partId: "color" },
+    { id: "d4",  title: "Button sizes differ",        priority: "Medium priority", partId: "sizing" },
+    { id: "d5",  title: "Heading weight differs",     priority: "Medium priority", partId: "fonts" },
+    { id: "d6",  title: "Card padding is off",        priority: "Low priority",    partId: "spacing" },
+    { id: "d7",  title: "Link color mismatch",        priority: "Medium priority", partId: "color" },
+    { id: "d8",  title: "Icon sizes differ",          priority: "Low priority",    partId: "sizing" },
+    { id: "d9",  title: "Line height too tight",      priority: "Low priority",    partId: "fonts" },
+    { id: "d10", title: "Section gaps differ",        priority: "Low priority",    partId: "spacing" },
   ],
 };
 
-// Accessibility Score, overview
-export const ACCESSIBILITY_CHANGES: Change[] = [
-  { id: "a1", label: "Low color Contrast", color: BLUE },
-  { id: "a2", label: "Missing image alt text", color: PURPLE },
-  { id: "a3", label: "Non-descriptive links", color: YELLOW },
-  { id: "a4", label: "Missing form labels", color: RED },
-];
-
-// Accessibility Score, one category selected
-export const ACCESSIBILITY_CHANGES_BY_CATEGORY: Record<string, Change[]> = {
-  Contrast: [
-    { id: "ac1", label: "Change #1", color: BLUE },
-    { id: "ac2", label: "Change #2", color: BLUE },
-    { id: "ac3", label: "Change #3", color: BLUE },
+export const accessibility: Report = {
+  key: "accessibility",
+  title: "Accessibility Score",
+  goodLabel: "Accessible",
+  remainderLabel: "Still to fix",
+  detailRemainderLabel: "Needs fixing",
+  parts: [
+    { id: "contrast",    name: "Contrast",    share: 28, weight: 34, color: P1, fixLabel: "Contrast fix" },
+    { id: "labels",      name: "Labels",      share: 20, weight: 23, color: P2, fixLabel: "Label fix" },
+    { id: "semantics",   name: "Semantics",   share: 15, weight: 17, color: P3, fixLabel: "Semantics fix" },
+    { id: "interaction", name: "Interaction", share: 12, weight: 13, color: P4, fixLabel: "Interaction fix" },
+    { id: "other",       name: "Other",       share: 12, weight: 13, color: P5, fixLabel: "Other fix" },
   ],
-  Labels: [
-    { id: "al1", label: "Change #1", color: PURPLE },
-    { id: "al2", label: "Change #2", color: PURPLE },
-    { id: "al3", label: "Change #3", color: PURPLE },
-  ],
-  Semantics: [
-    { id: "as1", label: "Change #1", color: YELLOW },
-    { id: "as2", label: "Change #2", color: YELLOW },
-    { id: "as3", label: "Change #3", color: YELLOW },
-  ],
-  Interaction: [
-    { id: "ai1", label: "Change #1", color: RED },
-    { id: "ai2", label: "Change #2", color: RED },
-    { id: "ai3", label: "Change #3", color: RED },
+  changes: [
+    { id: "a1",  title: "Low color contrast",         priority: "High priority",   partId: "contrast" },
+    { id: "a2",  title: "Missing image alt text",     priority: "Medium priority", partId: "labels" },
+    { id: "a3",  title: "Non-descriptive links",      priority: "Medium priority", partId: "semantics" },
+    { id: "a4",  title: "Missing form labels",        priority: "Medium priority", partId: "labels" },
+    { id: "a5",  title: "Touch targets too small",    priority: "Medium priority", partId: "interaction" },
+    { id: "a6",  title: "Heading levels skipped",     priority: "Low priority",    partId: "semantics" },
+    { id: "a7",  title: "Placeholder text too faint", priority: "Low priority",    partId: "contrast" },
+    { id: "a8",  title: "Missing page language",      priority: "Low priority",    partId: "other" },
+    { id: "a9",  title: "Focus ring hidden",          priority: "Medium priority", partId: "interaction" },
+    { id: "a10", title: "Icon buttons unnamed",       priority: "Medium priority", partId: "labels" },
   ],
 };
+
+export const reports = { design, accessibility } as const;
+
+/** Overall score = sum of the shares. */
+export const score = (r: Report) => r.parts.reduce((n, p) => n + p.share, 0);

@@ -1,69 +1,72 @@
-import type { ReactNode } from "react";
-import type { Category } from "../global";
+import { donutPaths } from "../lib/chart";
+import type { Slice } from "./ScoreBreakdown";
 
 interface Props {
-  segments: Category[];
-  onSelect?: (segment: Category) => void;
-  size?: number;        // internal drawing size and max display size
-  thickness?: number;   // ring thickness
-  gap?: number;         // white space between slices
-  track?: boolean;      // show the gray empty ring
-  children?: ReactNode; // center content
+  slices: Slice[];
+  remainder: number;
+  active: number | null;
+  onHover: (i: number | null) => void;
+  onSelect?: (id: string) => void;
+  size?: number;
+  centerValue: string;
+  centerLabel: string;
 }
 
 export default function PieChart({
-  segments,
+  slices,
+  remainder,
+  active,
+  onHover,
   onSelect,
-  size = 140,
-  thickness = 22,
-  gap = 3,
-  track = true,
-  children,
+  size = 120,
+  centerValue,
+  centerLabel,
 }: Props) {
-  const r = (size - thickness) / 2;
-  const circumference = 2 * Math.PI * r;
-  const useGap = segments.length > 1 ? gap : 0;
-  let offset = 0;
-
+  const { slices: paths, rest } = donutPaths(slices.map((s) => s.value), remainder);
   return (
-    <div className="relative aspect-square w-full" style={{ maxWidth: size }}>
-      <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
-        {/* background track (empty part of the ring) */}
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none"
-          strokeWidth={thickness}
-          className={track ? "stroke-gray-200" : "stroke-transparent"}
-        />
-        {/* thin outline on the outer and inner edge of the ring */}
-        <circle
-          cx={size / 2} cy={size / 2} r={r + thickness / 2 - 0.5}
-          fill="none" strokeWidth={1} className="stroke-gray-300"
-        />
-        <circle
-          cx={size / 2} cy={size / 2} r={r - thickness / 2 + 0.5}
-          fill="none" strokeWidth={1} className="stroke-gray-300"
-        />
-        {segments.map((s) => {
-          const full = (s.value / 100) * circumference;
-          const len = Math.max(0, full - useGap);
-          const slice = (
-            <circle
-              key={s.label}
-              cx={size / 2} cy={size / 2} r={r} fill="none"
-              stroke={s.color}
-              strokeWidth={thickness}
-              strokeDasharray={`${len} ${circumference - len}`}
-              strokeDashoffset={-(offset + useGap / 2)}
-              onClick={() => onSelect?.(s)}
-              className={onSelect ? "cursor-pointer hover:opacity-80" : ""}
-            />
-          );
-          offset += full;
-          return slice;
-        })}
+    <div className="relative flex-none" style={{ width: size, height: size }}>
+      {/* soft glow behind the donut */}
+      <div
+        className="pointer-events-none absolute -inset-4 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(143,114,240,.32) 0%, rgba(143,114,240,0) 68%)" }}
+      />
+      <svg viewBox="0 0 42 42" width={size} height={size} className="relative" aria-hidden="true">
+        {rest && (
+          <path
+            d={rest}
+            fill="var(--track)"
+            stroke="var(--track-line)"
+            strokeWidth=".55"
+            strokeLinejoin="round"
+            className="pointer-events-none"
+          />
+        )}
+        {paths.map(
+          (d, i) =>
+            d && (
+              <path
+                key={slices[i].id}
+                d={d}
+                fill={slices[i].color}
+                onMouseEnter={() => onHover(i)}
+                onMouseLeave={() => onHover(null)}
+                onClick={() => onSelect?.(slices[i].id)}
+                style={{
+                  cursor: onSelect ? "pointer" : "default",
+                  transformOrigin: "21px 21px",
+                  transition: "transform .15s, opacity .15s",
+                  transform: active === i ? "scale(1.07)" : "scale(1)",
+                  opacity: active === null || active === i ? 1 : 0.3,
+                }}
+              />
+            )
+        )}
       </svg>
-      <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-base font-bold leading-tight text-gray-900">
-        {children}
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-xl font-extrabold leading-none tracking-tight text-[#2A1470]">
+          {centerValue}
+        </span>
+        <span className="mt-1 text-[11px] font-bold text-[var(--muted)]">{centerLabel}</span>
       </div>
     </div>
   );

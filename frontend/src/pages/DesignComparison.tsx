@@ -1,30 +1,16 @@
-import { useState } from "react";
-import ScoreBreakdown from "../components/ScoreBreakdown";
+import ScoreBreakdown, { overviewCard } from "../components/ScoreBreakdown";
 import ChangesList from "../components/ChangesList";
-import {
-  DESIGN_CATEGORIES,
-  DESIGN_CHANGES,
-  DESIGN_CHANGES_BY_CATEGORY,
-  type Category,
-} from "../global";
+import { design } from "../data/changes";
 
-export default function DesignComparison() {
-  const [selected, setSelected] = useState<Category | null>(null);
+interface Props {
+  onSelect: (partId: string) => void;
+}
 
-  const changes = selected
-    ? DESIGN_CHANGES_BY_CATEGORY[selected.label] ?? []
-    : DESIGN_CHANGES;
-
+export default function DesignComparison({ onSelect }: Props) {
   return (
     <div className="space-y-3">
-      <ScoreBreakdown
-        title="Design Comparison"
-        categories={DESIGN_CATEGORIES}
-        centerLabel="Similar"
-        selected={selected}
-        onSelect={setSelected}
-      />
-      <ChangesList changes={changes} />
+      <ScoreBreakdown card={overviewCard(design)} onSelect={onSelect} />
+      <ChangesList changes={design.changes} parts={design.parts} />
     </div>
   );
 }

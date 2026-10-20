@@ -1,31 +1,61 @@
-import type { Category } from "../types/design";
+import type { Slice } from "./ScoreBreakdown";
 
 interface Props {
-  items: Category[];
-  onSelect?: (item: Category) => void;
+  slices: Slice[];
+  rest: number;
+  restLabel: string;
+  active: number | null;
+  onHover: (i: number | null) => void;
+  onSelect?: (id: string) => void;
 }
 
-export default function Legend({ items, onSelect }: Props) {
+export default function Legend({ slices, rest, restLabel, active, onHover, onSelect }: Props) {
   return (
-    <ul className="space-y-1.5">
-      {items.map((item) => (
-        <li key={item.label}>
-          <button
-            type="button"
-            onClick={() => onSelect?.(item)}
-            className="flex w-full cursor-pointer items-center gap-2 text-left hover:opacity-80"
-          >
-            <span
-              className="h-3 w-3 shrink-0 rounded-full"
-              style={{ backgroundColor: item.color }}
-            />
-            <span className="w-20 text-xs text-gray-900">{item.label}</span>
-            <span className="text-xs text-slate-500">
-              {Math.round(item.value)}%
-            </span>
-          </button>
+    <ul className="list-none">
+      {slices.map((s, i) => {
+        const cls =
+          "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs font-semibold transition";
+        const style = {
+          opacity: active === null || active === i ? 1 : 0.45,
+          background: active === i ? "#F3F0FF" : "transparent",
+        };
+        const body = (
+          <>
+            <i className="h-2.5 w-2.5 flex-none rounded-sm" style={{ background: s.color }} />
+            <span className="flex-1">{s.name}</span>
+            <span>{s.value}%</span>
+          </>
+        );
+        return (
+          <li key={s.id}>
+            {onSelect ? (
+              <button
+                type="button"
+                className={`${cls} cursor-pointer`}
+                style={style}
+                onMouseEnter={() => onHover(i)}
+                onMouseLeave={() => onHover(null)}
+                onFocus={() => onHover(i)}
+                onBlur={() => onHover(null)}
+                onClick={() => onSelect(s.id)}
+              >
+                {body}
+              </button>
+            ) : (
+              <div className={cls} style={style}>
+                {body}
+              </div>
+            )}
+          </li>
+        );
+      })}
+      {rest > 0 && (
+        <li className="flex items-center gap-2 px-1.5 py-1 text-xs font-semibold text-[var(--muted)]">
+          <i className="h-2.5 w-2.5 flex-none rounded-sm border border-[var(--track-line)] bg-[var(--track)]" />
+          <span className="flex-1">{restLabel}</span>
+          <span>{rest}%</span>
         </li>
-      ))}
+      )}
     </ul>
   );
 }

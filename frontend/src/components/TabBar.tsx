@@ -1,32 +1,33 @@
-import type { TabItem } from "../global";
+import type { TabId, TabItem } from "../global";
 
 interface Props {
   tabs: TabItem[];
-  active: string;
-  onChange: (id: string) => void;
+  active: TabId | null; // null = nothing highlighted (Account page)
+  onChange: (t: TabId) => void;
 }
 
 export default function TabBar({ tabs, active, onChange }: Props) {
   return (
-    <div className="flex gap-1 rounded-full border border-[#E3E0FF] bg-white/70 p-1">
-      {tabs.map((tab) => {
-        const isActive = tab.id === active;
+    <nav
+      aria-label="Sections"
+      className="flex gap-1 rounded-full bg-white p-1 shadow-[0_2px_8px_rgba(91,51,200,.08)]"
+    >
+      {tabs.map((t) => {
+        const on = t.id === active;
         return (
           <button
-            key={tab.id}
+            key={t.id}
             type="button"
-            onClick={() => onChange(tab.id)}
-            className={
-              "flex-1 cursor-pointer rounded-full px-3 py-1.5 text-xs font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#9381FF] " +
-              (isActive
-                ? "bg-[#5748CC] text-white"
-                : "text-[#1E1B4B] hover:bg-[#EFEDFF]")
-            }
+            aria-current={on ? "page" : undefined}
+            onClick={() => onChange(t.id)}
+            className={`flex-1 cursor-pointer rounded-full px-3 py-1.5 text-xs font-semibold ${
+              on ? "bg-[var(--p1)] text-white" : "text-[var(--ink2)]"
+            }`}
           >
-            {tab.label}
+            {t.label}
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }

@@ -1,82 +1,150 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { parseFigma } from "../lib/figma";
+import { usePersistentState } from "../hooks/usePersistentState";
+import PillButton from "../components/PillButton";
 
-interface Props {
-  onConnected: (url: string) => void;
+interface Recent {
+  name: string;
+  url: string;
 }
 
-const FIGMA_HISTORY = [
-  { id: 1, label: "Homepage redesign", url: "figma.com/file/abc123" },
-  { id: 2, label: "Dashboard v2", url: "figma.com/file/def456" },
-  { id: 3, label: "Accessibility pass", url: "figma.com/file/ghi789" },
-];
+interface Props {
+  url: string; // last link used, to prefill the box
+  error: boolean; // the last attempt was not a usable Figma link
+  onConnect: (url: string) => void;
+  onOpen: (name: string) => void;
+}
 
-export default function FigmaLink({ onConnected }: Props) {
-  const [url, setUrl] = useState("");
+const EXAMPLE = "https://www.figma.com/design/Xk29aQ/Homepage-redesign?node-id=0-1";
+const card = "rounded-2xl bg-white p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
-  const connect = () => {
-    const trimmed = url.trim();
-    if (!trimmed) return;
-    onConnected(trimmed);
+export default function FigmaLink({ url, error, onConnect, onOpen }: Props) {
+  const [value, setValue] = useState(url);
+  const [dismissed, setDismissed] = useState(false);
+  const [recents, setRecents] = usePersistentState<Recent[]>("parity-recents", []);
+  const input = useRef<HTMLInputElement>(null);
+  const showError = error && !dismissed;
+
+  const submit = () => {
+    setDismissed(false);
+    const ref = parseFigma(value);
+    if (ref) {
+      const link = value.trim();
+      setRecents((r) => [{ name: ref.name, url: link }, ...r.filter((x) => x.url !== link)].slice(0, 20));
+    }
+    onConnect(value);
+  };
+  const retry = () => {
+    setDismissed(true);
+    input.current?.focus();
   };
 
   return (
     <div className="space-y-3">
-      <section className="rounded-2xl border border-[#E3E0FF] bg-white p-4">
-        <h1 className="text-base font-semibold text-[#1E1B4B]">
-          Connect your Figma Design Here:
-        </h1>
-        <p className="mt-1 text-xs text-slate-500">Paste your Figma File URL</p>
+      <section className={card}>
+        <h1 className="text-base font-semibold text-[var(--ink)]">Connect your Figma Design Here:</h1>
+        <p className="mt-1 text-xs text-[var(--muted)]">Paste your Figma File URL</p>
 
         <input
+          id="figurl"
+          ref={input}
           type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && connect()}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setDismissed(true);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder="figma.com/file/..."
           aria-label="Figma file URL"
-          className="mt-2 w-full rounded-lg border border-[#DAD6FF] px-3 py-2 text-xs text-[#1E1B4B] outline-none focus:border-[#5748CC]"
+          aria-invalid={showError}
+          className={`mt-2 w-full rounded-lg border-[1.5px] bg-white px-3 py-2 text-xs text-[var(--ink)] outline-none ${
+            showError ? "border-[var(--err)]" : "border-[#D9D0F7] focus:border-[var(--p1)]"
+          }`}
         />
 
-        <p className="mt-2 text-[11px] text-slate-500">
-          Make sure the Figma URL is public
-        </p>
+        {showError ? (
+          <p role="alert" className="mt-2 text-[11px] font-semibold text-[var(--err)]">
+            That doesn’t look like a Figma file link
+          </p>
+        ) : (
+          <div className="mt-2 flex justify-between text-[11px] text-[var(--muted)]">
+            <span>Make sure the Figma URL is public</span>
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                className="cursor-pointer font-bold text-[var(--p1)]"
+                onClick={() => {
+                  setValue(EXAMPLE);
+                  input.current?.focus();
+                }}
+              >
+                Try an example
+              </button>
+            )}
+          </div>
+        )}
 
         <button
           type="button"
-          onClick={connect}
-          disabled={!url.trim()}
-          className="mt-2 w-full cursor-pointer rounded-lg bg-[#5748CC] py-2 text-xs font-semibold text-white hover:bg-[#4A3DB8] disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={submit}
+          className="mt-2 w-full cursor-pointer rounded-lg bg-[linear-gradient(180deg,#6F47DB,#5A32C6)] py-2 text-xs font-semibold text-white"
         >
           Connect Design
         </button>
       </section>
 
-      <section className="rounded-2xl border border-[#E3E0FF] bg-white p-4">
-        <h2 className="text-base font-semibold text-[#1E1B4B]">Figma History</h2>
-
-        <div className="mt-2 max-h-28 overflow-y-auto">
-          {FIGMA_HISTORY.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between border-t border-[#E3E0FF] py-2 first:border-t-0"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-[#1E1B4B]">
-                  {item.label}
-                </p>
-                <p className="truncate text-[11px] text-slate-500">{item.url}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onConnected(item.url)}
-                className="ml-3 shrink-0 cursor-pointer rounded-full border border-[#5748CC] px-3 py-0.5 text-xs font-semibold text-[#5748CC] hover:bg-[#F1EFFF]"
-              >
-                Open
-              </button>
+      {showError ? (
+        <section className={card}>
+          <h2 className="text-base font-semibold text-[var(--ink)]">Try this</h2>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs">
+            <li>Open the file in Figma and click Share.</li>
+            <li>Set access to “Anyone with the link can view”.</li>
+            <li>Copy the link and paste it above.</li>
+          </ol>
+          <div className="mt-3 flex gap-2">
+            <PillButton onClick={retry} className="flex-1 text-xs">
+              Try again
+            </PillButton>
+            <PillButton variant="ghost" onClick={retry} className="flex-1 text-xs">
+              Back to Figma history
+            </PillButton>
+          </div>
+        </section>
+      ) : (
+        <section className={card}>
+          <h2 className="text-base font-semibold text-[var(--ink)]">Figma History</h2>
+          {recents.length > 0 ? (
+            <ul className="scroll mt-2 max-h-28 overflow-y-auto pr-2">
+              {recents.map((r) => (
+                <li
+                  key={r.url}
+                  className="flex items-center justify-between border-t border-[var(--line)] py-2 first:border-t-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-[var(--ink)]">{r.name}</p>
+                    <p className="truncate text-[11px] text-[var(--muted)]">
+                      {r.url.replace(/^https?:\/\/(www\.)?/, "")}
+                    </p>
+                  </div>
+                  <PillButton
+                    variant="ghost"
+                    onClick={() => onOpen(r.name)}
+                    className="ml-3 shrink-0 py-0.5 text-xs"
+                  >
+                    Open
+                  </PillButton>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-2 pb-1 pt-3 text-center">
+              <p className="text-sm font-semibold text-[var(--ink)]">No files yet</p>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">Paste a Figma link above to get started.</p>
             </div>
-          ))}
-        </div>
-      </section>
+          )}
+        </section>
+      )}
     </div>
   );
 }
