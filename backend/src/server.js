@@ -31,6 +31,18 @@ app.get("/", (req, res) => {
   res.send("Parity backend is running");
 });
 
+app.get("/me", requireUser, (req, res) => {
+  res.json({
+    id: req.user.id,
+    email: req.user.email,
+    name:
+      req.user.user_metadata?.full_name ||
+      req.user.user_metadata?.user_name ||
+      req.user.email,
+    avatar_url: req.user.user_metadata?.avatar_url || null,
+  });
+});
+
 app.get("/figma-projects", requireUser, async (req, res) => {
   const { data, error } = await supabase
     .from("figma_projects")
