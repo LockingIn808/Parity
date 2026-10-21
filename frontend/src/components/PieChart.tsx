@@ -63,7 +63,7 @@ export default function PieChart({
         )}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xl font-extrabold leading-none tracking-tight text-[#2A1470]">
+        <span className="text-xl font-extrabold leading-none tracking-tight text-[var(--ink)]">
           {centerValue}
         </span>
         <span className="mt-1 text-[11px] font-bold text-[var(--muted)]">{centerLabel}</span>

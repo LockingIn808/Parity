@@ -26,8 +26,8 @@ export default function ChangesList({ changes, parts, sub = "priority" }: Props)
   });
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]">
-      <h3 className="mb-2 text-base font-semibold text-gray-900">Changes to Prioritize</h3>
+    <section className="rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]">
+      <h3 className="mb-2 text-base font-semibold text-[var(--ink)]">Changes to Prioritize</h3>
       {rows.length > 0 ? (
         <ul className="scroll max-h-40 overflow-y-auto pr-2">
           {rows.map(({ c, part }) => (
@@ -50,7 +50,7 @@ export default function ChangesList({ changes, parts, sub = "priority" }: Props)
               <path d="M5 12.5l4.5 4.5L19 7" />
             </svg>
           </div>
-          <p className="mt-2 text-sm font-semibold text-gray-900">You’re all in sync</p>
+          <p className="mt-2 text-sm font-semibold text-[var(--ink)]">You’re all in sync</p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">No changes to prioritize.</p>
         </div>
       )}

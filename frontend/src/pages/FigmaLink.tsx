@@ -16,7 +16,7 @@ interface Props {
 }
 
 const EXAMPLE = "https://www.figma.com/design/Xk29aQ/Homepage-redesign?node-id=0-1";
-const card = "rounded-2xl bg-white p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
+const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
 export default function FigmaLink({ url, error, onConnect, onOpen }: Props) {
   const [value, setValue] = useState(url);
@@ -58,8 +58,8 @@ export default function FigmaLink({ url, error, onConnect, onOpen }: Props) {
           placeholder="figma.com/file/..."
           aria-label="Figma file URL"
           aria-invalid={showError}
-          className={`mt-2 w-full rounded-lg border-[1.5px] bg-white px-3 py-2 text-xs text-[var(--ink)] outline-none ${
-            showError ? "border-[var(--err)]" : "border-[#D9D0F7] focus:border-[var(--p1)]"
+          className={`mt-2 w-full rounded-lg border-[1.5px] bg-[var(--field)] px-3 py-2 text-xs text-[var(--ink)] outline-none ${
+            showError ? "border-[var(--err)]" : "border-[var(--field-border)] focus:border-[var(--p1)]"
           }`}
         />
 

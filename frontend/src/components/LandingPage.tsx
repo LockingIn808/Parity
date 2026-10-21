@@ -51,7 +51,7 @@ export default function LandingPage({ onGithub }: { onGithub: () => void }) {
   return (
     <Screen>
     <div className="parity-landing">
-      <div className="parity-landing-card mx-auto mt-3 w-full max-w-[300px] rounded-2xl bg-white pb-4 shadow-[0_10px_30px_rgba(90,50,198,.14)]">
+      <div className="parity-landing-card force-light mx-auto mt-3 w-full max-w-[300px] rounded-2xl bg-white pb-4 shadow-[0_10px_30px_rgba(90,50,198,.14)]">
         {/* animation stage */}
         <div className="parity-logo-stage relative h-40 overflow-hidden rounded-t-[22px]" aria-hidden="true">
           <svg ref={ref('moon')} viewBox="0 0 24 24" width="38" height="38" className="absolute" style={{ left: 23, top: 21 }}>

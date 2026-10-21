@@ -55,7 +55,7 @@ export default function ScoreBreakdown({ card, onSelect }: Props) {
   return (
     <section
       aria-label={card.title}
-      className="rounded-2xl border border-[#E4DAFD] bg-[linear-gradient(160deg,#fff_0%,#F4EFFF_100%)] p-4 shadow-[0_16px_36px_rgba(90,50,198,.24),0_2px_6px_rgba(90,50,198,.10)]"
+      className="rounded-2xl border border-[var(--card-border)] bg-[linear-gradient(160deg,var(--card)_0%,var(--card-grad)_100%)] p-4 shadow-[0_16px_36px_rgba(90,50,198,.24),0_2px_6px_rgba(90,50,198,.10)]"
     >
       <div className="flex items-center gap-4" style={{ minHeight: VIEW_HEIGHT }}>
         <PieChart

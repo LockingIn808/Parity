@@ -17,7 +17,7 @@ export default function Legend({ slices, rest, restLabel, active, onHover, onSel
           "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs font-semibold transition";
         const style = {
           opacity: active === null || active === i ? 1 : 0.45,
-          background: active === i ? "#F3F0FF" : "transparent",
+          background: active === i ? "var(--card-soft)" : "transparent",
         };
         const body = (
           <>

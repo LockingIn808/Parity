@@ -1,13 +1,18 @@
 @import "tailwindcss";
 @import "@fontsource-variable/plus-jakarta-sans";
 
-/* Parity design colors */
+/* lets you write dark:... classes */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Parity design colors (light) */
 :root {
+  color-scheme: light;
   --p1: #5a32c6;
   --p2: #8f72f0;
   --p3: #b7a3f5;
   --p4: #efb87a;
   --p5: #f7d9b4;
+  --fill: #5a32c6; /* solid fills: active tab, switches */
   --ink: #1e1050;
   --ink2: #3a2a7a;
   --muted: #6b6490;
@@ -16,6 +21,62 @@
   --err: #d64545;
   --track: #f6f2ff;
   --track-line: #d2c6f7;
+
+  --page: #f3f0ff;
+  --card: #ffffff;
+  --card-soft: #f3f0ff;
+  --card-tint: #ede7ff;
+  --card-border: #e4dafd;
+  --card-grad: #f4efff;
+  --field: #ffffff;
+  --field-border: #d9d0f7;
+  --scroll-track: #f0ecfb;
+  --switch-off: #d9d0f7;
+  --badge-bg: #e7f6ee;
+  --badge-text: #1e6b45;
+  --bg-a: #ffd8be;
+  --bg-b: #b8b8ff;
+  --bg-base: #f8f7ff;
+}
+
+/* Dark theme: set on <html data-theme="dark"> by App.tsx */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --p1: #a99cf8;
+  --fill: #6c5ce7;
+  --ink: #f4f1ff;
+  --ink2: #d6d0f5;
+  --muted: #a39cc9;
+  --line: rgba(255, 255, 255, 0.09);
+  --err: #ff8080;
+  --track: #2a2552;
+  --track-line: #4a4380;
+
+  --page: #0f0c24;
+  --card: #221e47;
+  --card-soft: #2d2860;
+  --card-tint: #352f6e;
+  --card-border: #3a3470;
+  --card-grad: #1b1738;
+  --field: #17132f;
+  --field-border: #3d3770;
+  --scroll-track: #2a2552;
+  --switch-off: #3d3770;
+  --badge-bg: rgba(63, 191, 127, 0.18);
+  --badge-text: #7fe3b0;
+  --bg-a: #5a4249;
+  --bg-b: #4b3fa0;
+  --bg-base: #17142f;
+}
+
+/* Put this on an element that should stay light even in dark mode */
+.force-light {
+  --ink: #1e1050;
+  --ink2: #3a2a7a;
+  --muted: #6b6490;
+  --line: #f0ecfb;
+  --p1: #5a32c6;
+  color: #1e1050;
 }
 
 /* Global sizing */
@@ -39,47 +100,50 @@ body,
 body {
   font-family: "Plus Jakarta Sans Variable", system-ui, sans-serif;
   color: var(--ink);
-  background: #f3f0ff;
+  background: var(--page);
   overflow: hidden;
 }
 
-/* React root */
+/* React root: fills the panel and scrolls when the content is taller */
 #root {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   container-type: size;
+  scrollbar-width: thin;
+  scrollbar-color: var(--p3) transparent;
 }
 
-/* Figma-inspired gradient background */
+/* Gradient background: covers the whole panel, however big it is */
 .parity-bg {
+  min-height: 100%;
   background:
-    radial-gradient(
-      circle at 0% 0%,
-      #ffd8be 0%,
-      rgba(255, 216, 190, 0) 45%
-    ),
-    radial-gradient(
-      circle at 100% 100%,
-      #b8b8ff 0%,
-      rgba(184, 184, 255, 0) 55%
-    ),
-    #f8f7ff;
+    radial-gradient(circle at 0% 0%, var(--bg-a) 0%, transparent 45%),
+    radial-gradient(circle at 100% 100%, var(--bg-b) 0%, transparent 55%),
+    var(--bg-base);
 }
 
-/* Main screen */
+/* Main app view: the background is full-bleed, .parity-inner holds the content */
+.parity-dashboard {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.parity-inner {
+  padding: 16px;
+}
+
+/* Full-screen steps (landing, login, connecting) */
 .parity-screen {
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-}
-
-/* Main dashboard */
-.parity-dashboard {
-  width: 100%;
-  min-width: 0;
 }
 
 /* Landing layout */
@@ -105,7 +169,7 @@ body {
 }
 
 .scroll::-webkit-scrollbar-track {
-  background: #f0ecfb;
+  background: var(--scroll-track);
   border-radius: 3px;
 }
 
@@ -121,7 +185,7 @@ body {
 @supports not selector(::-webkit-scrollbar) {
   .scroll {
     scrollbar-width: thin;
-    scrollbar-color: var(--p3) #f0ecfb;
+    scrollbar-color: var(--p3) var(--scroll-track);
   }
 }
 
@@ -194,7 +258,7 @@ input:focus-visible {
     padding: 10px;
   }
 
-  .parity-dashboard {
+  .parity-inner {
     padding: 10px;
   }
 
@@ -213,33 +277,4 @@ input:focus-visible {
   * {
     transition: none !important;
   }
-}
-
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-}
-
-/* Full-height screen */
-.parity-screen {
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-/* Extend the gradient across the entire panel */
-.parity-bg {
-  min-height: 100%;
-}
-
-/* Let the dashboard fill available space */
-.parity-dashboard {
-  flex: 1 0 auto;
-  min-height: 100%;
 }

@@ -76,7 +76,7 @@ export const SAMPLES: Record<string, { figma: Side; site: Side }> = {
 
 function Tile({ label, side, site }: { label: string; side: Side; site?: boolean }) {
   return (
-    <div className="flex-1 rounded-xl px-3 py-2" style={{ background: site ? "#FFF8EE" : "#F6F3FF" }}>
+    <div className="force-light flex-1 rounded-xl px-3 py-2" style={{ background: site ? "#FFF8EE" : "#F6F3FF" }}>
       <div className="text-[11px] font-bold tracking-wide" style={{ color: site ? "#8A5200" : "#5A32C6" }}>
         {label}
       </div>
@@ -90,7 +90,7 @@ export default function PreviewSample({ partId }: { partId: string }) {
   const s = SAMPLES[partId];
   if (!s) {
     return (
-      <p className="w-full rounded-xl bg-[#F6F3FF] px-3 py-2 text-xs text-[var(--muted)]">
+      <p className="force-light w-full rounded-xl bg-[#F6F3FF] px-3 py-2 text-xs text-[var(--muted)]">
         No preview for this change yet.
       </p>
     );

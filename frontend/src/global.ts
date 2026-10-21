@@ -1,6 +1,8 @@
 
 export type TabId = "figma" | "design" | "accessibility";
 
+export type Theme = "light" | "dark";
+
 export interface TabItem {
   id: TabId;
   label: string;

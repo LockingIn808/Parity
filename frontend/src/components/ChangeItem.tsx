@@ -32,7 +32,7 @@ export default function ChangeItem({ change, part, subtitle, open, done, onPrevi
           </svg>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-900">{change.title}</p>
+          <p className="text-sm font-semibold text-[var(--ink)]">{change.title}</p>
           <p className="text-[11px] text-[var(--muted)]">{subtitle}</p>
         </div>
         <PillButton variant={open ? "ghostOn" : "ghost"} aria-expanded={open} onClick={onPreview}>

@@ -3,7 +3,7 @@ import Screen from '../components/Screen';
 import { ghName, initialsOf } from '../lib/github';
 import mark from '../assets/mark.png';
 
-const field = 'flex h-10 items-center rounded-xl border-[1.5px] bg-white px-3 focus-within:border-[var(--p1)]';
+const field = 'flex h-10 items-center rounded-xl border-[1.5px] bg-[var(--field)] px-3 focus-within:border-[var(--p1)]';
 const input = 'min-w-0 flex-1 bg-transparent text-sm font-semibold text-[var(--ink)] outline-none';
 
 export default function GithubLogin({ onBack, onSubmit }: { onBack: () => void; onSubmit: (user: string) => void }) {
@@ -26,19 +26,19 @@ export default function GithubLogin({ onBack, onSubmit }: { onBack: () => void; 
   return (
     <Screen>
       <button type="button" onClick={onBack} className="self-start text-[11px] font-semibold text-[var(--p1)]">&#8249; Back</button>
-      <img src={mark} alt="" className="mx-auto mt-2.5 h-[54px] w-auto" />
+      <img src={mark} alt="" className="mx-auto mt-2.5 h-[54px] w-auto rounded-xl dark:box-content dark:bg-[#ECE7FF] dark:p-1.5" />
       <div className="text-center">
         <h1 className="m-0 text-2xl font-extrabold tracking-[-.02em]">Sign in with GitHub</h1>
         <p className="mb-0 mt-[5px] text-xs leading-[1.45] text-[var(--muted)]">Enter your GitHub username and password to continue.</p>
       </div>
 
-      <div className="rounded-2xl bg-white px-4 pb-[18px] pt-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]">
+      <div className="rounded-2xl bg-[var(--card)] px-4 pb-[18px] pt-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]">
         <label htmlFor="ghuser" className="mb-2 block text-[11px] font-bold">GitHub username</label>
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#7A52E8] to-[#4B2BB0] text-sm font-extrabold text-white">
             {name ? initialsOf(name) : '?'}
           </span>
-          <div className={`${field} flex-1 ${userErr ? 'border-[var(--err)]' : 'border-[#D9D0F7]'}`}>
+          <div className={`${field} flex-1 ${userErr ? 'border-[var(--err)]' : 'border-[var(--field-border)]'}`}>
             <span className="mr-[3px] text-sm font-bold text-[#8A84A8]">@</span>
             <input id="ghuser" className={input} value={user} placeholder="octocat" maxLength={60} autoComplete="off" autoCapitalize="none" spellCheck={false}
               onChange={(e) => { setUser(e.target.value); setUserErr(false); }} onKeyDown={enter} />
@@ -47,7 +47,7 @@ export default function GithubLogin({ onBack, onSubmit }: { onBack: () => void; 
         {userErr && <p role="alert" className="mb-0 mt-2 text-[11px] font-bold text-[#9B2C2C]">Use letters, numbers and single hyphens (up to 39 characters).</p>}
 
         <label htmlFor="ghpass" className="mb-2 mt-3 block text-[11px] font-bold">Password</label>
-        <div className={`${field} gap-2 pr-1.5 ${passErr ? 'border-[var(--err)]' : 'border-[#D9D0F7]'}`}>
+        <div className={`${field} gap-2 pr-1.5 ${passErr ? 'border-[var(--err)]' : 'border-[var(--field-border)]'}`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A84A8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="flex-none" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
           <input id="ghpass" className={input} type={show ? 'text' : 'password'} value={pass} placeholder="Your password" autoComplete="off" spellCheck={false}
             onChange={(e) => { setPass(e.target.value); setPassErr(false); }} onKeyDown={enter} />
