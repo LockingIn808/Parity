@@ -34,7 +34,7 @@ test('reviewed plan is immutable, rejects stale branch, commits atomically to a 
   await new Promise(resolve => server.on('listening', resolve));
   const address = `http://127.0.0.1:${server.address().port}`;
   const request = async (path, body, token = 'test-token') => {
-    const r = await originalFetch(address + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+    const r = await originalFetch(address + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitHub-Token': token }, body: JSON.stringify(body) });
     return { status: r.status, data: await r.json() };
   };
   try {

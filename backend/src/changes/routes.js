@@ -5,7 +5,7 @@ const { github, repoPath, readFile } = require('./github');
 const router = express.Router();
 const plans = new Map(); // Restarting the backend discards uncommitted plans.
 const fingerprint = token => createHash('sha256').update(token).digest('hex');
-const tokenFor = req => req.headers.authorization?.replace(/^Bearer /, '');
+const tokenFor = req => req.headers['x-github-token'];
 const wrap = handler => async (req, res) => {
   try { await handler(req, res, tokenFor(req)); }
   catch (error) { res.status(422).json({ error: error.message }); }

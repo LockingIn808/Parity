@@ -20,6 +20,10 @@ const {
   validateCompareBody,
 } = require("./validation");
 
+const { explainResults } = require("./ai/explainResults");
+const githubRoutes = require("./changes/routes");
+const { contrast } = require("./changes/contrast");
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -55,6 +59,7 @@ app.use(
     allowedHeaders: [
       "Content-Type",
       "Authorization",
+      "X-GitHub-Token",
     ],
     methods: [
       "GET",
@@ -546,6 +551,14 @@ app.post("/compare/element", requireUser, async (req, res) => {
     const accessibility =
       scoreAccessibility(element);
 
+    const accessibilityIssues =
+      getAccessibilityIssues(accessibility);
+
+    const ai = await explainResults(result, {
+      accessibility_score: accessibility.total,
+      accessibility_categories: accessibility.parts,
+      accessibility_issues: accessibilityIssues,
+    });
 
     res.json({
       project: {
@@ -563,8 +576,8 @@ app.post("/compare/element", requireUser, async (req, res) => {
       ...result,
       accessibility_score: accessibility.total,
       accessibility_categories: accessibility.parts,
-      accessibility_issues:
-        getAccessibilityIssues(accessibility),
+      accessibility_issues: accessibilityIssues,
+      ...ai,
     });
   } catch (error) {
     if (
@@ -603,6 +616,19 @@ app.delete("/figma-projects/:id", requireUser, async (req, res) => {
 
   res.status(204).end();
 });
+
+app.post("/api/contrast", (req, res) => {
+  try {
+    const { foreground, background } = req.body || {};
+    res.json(contrast(foreground, background));
+  } catch (error) {
+    res.status(400).json({
+      error: error.message,
+    });
+  }
+});
+
+app.use("/api/github", githubRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
