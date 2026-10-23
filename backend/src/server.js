@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const supabase = require("./supabase");
 const { compareElement } = require("./compare");
 const {
@@ -15,6 +16,49 @@ const {
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+const configuredOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (origin.startsWith("chrome-extension://")) {
+        return callback(null, true);
+      }
+
+      if (
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:")
+      ) {
+        return callback(null, true);
+      }
+
+      if (configuredOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+    methods: [
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+  })
+);
 
 app.use(express.json({ limit: "2mb" }));
 
