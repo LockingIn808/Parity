@@ -14,6 +14,12 @@ const {
   normalizeFetchedNode,
 } = require("./figma");
 
+const {
+  validateFigmaProjectBody,
+  validateFrameBody,
+  validateCompareBody,
+} = require("./validation");
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -189,13 +195,15 @@ app.get("/figma-projects/:id", requireUser, async (req, res) => {
 });
 
 app.post("/figma-projects", requireUser, async (req, res) => {
-  const { file_url } = req.body;
+  const validationError = validateFigmaProjectBody(req.body);
 
-  if (!file_url) {
+  if (validationError) {
     return res.status(400).json({
-      error: "A Figma URL is required",
+      error: validationError,
     });
   }
+
+  const { file_url } = req.body;
 
   const parsed = parseFigmaUrl(file_url);
 
@@ -307,13 +315,15 @@ app.patch(
   "/figma-projects/:id/frame",
   requireUser,
   async (req, res) => {
-    const { frame_id } = req.body;
+    const validationError = validateFrameBody(req.body);
 
-    if (!frame_id) {
+    if (validationError) {
       return res.status(400).json({
-        error: "frame_id is required",
+        error: validationError,
       });
     }
+
+    const { frame_id } = req.body;
 
     try {
       const project = await getUserProject(
@@ -451,23 +461,19 @@ app.post(
 );
 
 app.post("/compare/element", requireUser, async (req, res) => {
+  const validationError = validateCompareBody(req.body);
+
+  if (validationError) {
+    return res.status(400).json({
+      error: validationError,
+    });
+  }
+
   const {
     project_id,
     element,
     figma_node_id = null,
   } = req.body;
-
-  if (!project_id) {
-    return res.status(400).json({
-      error: "project_id is required",
-    });
-  }
-
-  if (!element || typeof element !== "object") {
-    return res.status(400).json({
-      error: "element is required",
-    });
-  }
 
   try {
     const project = await getUserProject(
