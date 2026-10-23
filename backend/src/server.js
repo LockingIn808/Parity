@@ -23,6 +23,9 @@ const {
 const { explainResults } = require("./ai/explainResults");
 const githubRoutes = require("./changes/routes");
 const { contrast } = require("./changes/contrast");
+const {
+  commitFixesFromCss,
+} = require("./changes/fixes");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -554,6 +557,13 @@ app.post("/compare/element", requireUser, async (req, res) => {
     const accessibilityIssues =
       getAccessibilityIssues(accessibility);
 
+    const commitFixes = element.selector
+      ? commitFixesFromCss(
+          element.selector,
+          result.css_fixes
+        )
+      : [];
+
     const ai = await explainResults(result, {
       accessibility_score: accessibility.total,
       accessibility_categories: accessibility.parts,
@@ -577,6 +587,7 @@ app.post("/compare/element", requireUser, async (req, res) => {
       accessibility_score: accessibility.total,
       accessibility_categories: accessibility.parts,
       accessibility_issues: accessibilityIssues,
+      commit_fixes: commitFixes,
       ...ai,
     });
   } catch (error) {

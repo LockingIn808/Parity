@@ -196,7 +196,8 @@ async function run() {
       typeof comparison.design_score !== "number" ||
       typeof comparison.accessibility_score !==
         "number" ||
-      !Array.isArray(comparison.suggested_fixes)
+      !Array.isArray(comparison.suggested_fixes) ||
+      !Array.isArray(comparison.commit_fixes)
     ) {
       throw new Error(
         "Comparison response is missing expected fields"
@@ -212,6 +213,9 @@ async function run() {
     );
     console.log(
       `Suggested fixes: ${comparison.suggested_fixes.length}`
+    );
+    console.log(
+      `GitHub-ready fixes: ${comparison.commit_fixes.length}`
     );
 
     console.log("E2E TEST: PASSED");

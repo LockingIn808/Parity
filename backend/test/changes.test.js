@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { cssFor, makeFixes } = require('../src/changes/fixes');
+const { cssFor, makeFixes, commitFixesFromCss } = require('../src/changes/fixes');
 test('only supported concrete fixes become CSS', () => {
   const fixes = makeFixes({ matching: [{ designId: 'd', webpageId: 'w' }], designIssues: [
     { element: 'd', property: 'fontSize', expected: 18, actual: 12 },
@@ -60,4 +60,30 @@ test('contrast uses unrounded ratio and rejects unsupported colors', () => {
   assert.equal(contrast('#000000', '#ffffff').ratio, 21);
   assert.equal(contrast('#ffffff', '#ffffff').passesNormalText, false);
   assert.throws(() => contrast('transparent', '#ffffff'));
+});
+
+
+test('comparison CSS fixes convert directly into GitHub-ready fixes', () => {
+  const fixes = commitFixesFromCss('#hero', {
+    'font-family': 'Inter',
+    'font-size': '18px',
+    'font-weight': '600',
+    color: '#112233',
+    'background-color': '#ffffff',
+    padding: '12px',
+    gap: '8px',
+    width: '320px',
+    height: '48px',
+    'border-radius': '10px'
+  });
+
+  assert.equal(fixes.length, 10);
+
+  const css = cssFor(fixes);
+
+  assert.match(css, /#hero \{ font-family: Inter !important; \}/);
+  assert.match(css, /#hero \{ padding: 12px !important; \}/);
+  assert.match(css, /#hero \{ gap: 8px !important; \}/);
+  assert.match(css, /#hero \{ width: 320px !important; \}/);
+  assert.match(css, /#hero \{ height: 48px !important; \}/);
 });
