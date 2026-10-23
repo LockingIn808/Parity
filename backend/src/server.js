@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("./supabase");
+const { compareElement } = require("./compare");
 const {
   parseFigmaUrl,
   fetchFigmaFileSummary,
@@ -400,6 +401,123 @@ app.post(
     }
   }
 );
+
+app.post("/compare/element", requireUser, async (req, res) => {
+  const {
+    project_id,
+    element,
+    figma_node_id = null,
+  } = req.body;
+
+  if (!project_id) {
+    return res.status(400).json({
+      error: "project_id is required",
+    });
+  }
+
+  if (!element || typeof element !== "object") {
+    return res.status(400).json({
+      error: "element is required",
+    });
+  }
+
+  try {
+    const project = await getUserProject(
+      project_id,
+      req.user.id
+    );
+
+    if (!project) {
+      return res.status(404).json({
+        error: "Project not found",
+      });
+    }
+
+    if (!project.selected_frame_id) {
+      return res.status(400).json({
+        error: "Select a Figma frame before comparing an element",
+      });
+    }
+
+    let cachedProperties =
+      project.cached_properties || {};
+
+    let nodes = Array.isArray(cachedProperties.nodes)
+      ? cachedProperties.nodes
+      : [];
+
+    if (nodes.length === 0) {
+      const nodeResponse = await fetchFigmaNodes(
+        project.file_key,
+        [project.selected_frame_id]
+      );
+
+      cachedProperties =
+        normalizeFetchedNode(
+          nodeResponse,
+          project.selected_frame_id
+        ) || {};
+
+      nodes = Array.isArray(cachedProperties.nodes)
+        ? cachedProperties.nodes
+        : [];
+
+      if (nodes.length === 0) {
+        return res.status(502).json({
+          error: "The selected Figma frame has no nodes",
+        });
+      }
+
+      const { error: cacheError } = await supabase
+        .from("figma_projects")
+        .update({
+          cached_properties: cachedProperties,
+          last_fetched_at: new Date().toISOString(),
+        })
+        .eq("id", project.id)
+        .eq("user_id", req.user.id);
+
+      if (cacheError) {
+        return res.status(500).json({
+          error: cacheError.message,
+        });
+      }
+    }
+
+    const result = compareElement({
+      element,
+      nodes,
+      figmaNodeId: figma_node_id,
+    });
+
+    res.json({
+      project: {
+        id: project.id,
+        file_key: project.file_key,
+        file_name: project.file_name,
+        frame_id: project.selected_frame_id,
+        frame_name: project.selected_frame_name,
+      },
+      element: {
+        selector: element.selector || null,
+        tag: element.tag || null,
+        text: element.text || null,
+      },
+      ...result,
+    });
+  } catch (error) {
+    if (
+      error.code === "FIGMA_API_ERROR" ||
+      error.code === "FIGMA_NOT_CONFIGURED"
+    ) {
+      return sendFigmaError(res, error);
+    }
+
+    return res.status(400).json({
+      error: error.message || "Comparison failed",
+    });
+  }
+});
 
 app.delete("/figma-projects/:id", requireUser, async (req, res) => {
   const { data, error } = await supabase
