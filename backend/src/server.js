@@ -1,9 +1,17 @@
 const express = require("express");
 const supabase = require("./supabase");
-const { getFigmaFileKey } = require("./figma");
+const {
+  parseFigmaUrl,
+  fetchFigmaFileSummary,
+  fetchFigmaNodes,
+  extractFrames,
+  normalizeFetchedNode,
+} = require("./figma");
 
 const app = express();
-app.use(express.json());
+const port = process.env.PORT || 3000;
+
+app.use(express.json({ limit: "2mb" }));
 
 async function requireUser(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -12,7 +20,7 @@ async function requireUser(req, res, next) {
     return res.status(401).json({ error: "Not logged in" });
   }
 
-  const token = authHeader.substring(7);
+  const token = authHeader.slice(7);
 
   const {
     data: { user },
@@ -27,8 +35,80 @@ async function requireUser(req, res, next) {
   next();
 }
 
+async function getUserProject(projectId, userId) {
+  const { data, error } = await supabase
+    .from("figma_projects")
+    .select("*")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+function sendFigmaError(res, error) {
+  if (error.code === "FIGMA_NOT_CONFIGURED") {
+    return res.status(500).json({ error: error.message });
+  }
+
+  if (error.code === "FIGMA_API_ERROR") {
+    if (error.status === 401 || error.status === 403) {
+      return res.status(502).json({
+        error: "Figma rejected the request. Check the file access and Figma token.",
+      });
+    }
+
+    if (error.status === 404) {
+      return res.status(404).json({
+        error: "The Figma file or node could not be found.",
+      });
+    }
+
+    if (error.status === 429) {
+      return res.status(429).json({
+        error: "Figma rate limit reached. Try again later.",
+      });
+    }
+
+    return res.status(502).json({
+      error: error.message,
+    });
+  }
+
+  return res.status(500).json({
+    error: error.message || "Unexpected server error",
+  });
+}
+
 app.get("/", (req, res) => {
   res.send("Parity backend is running");
+});
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "parity-backend",
+  });
+});
+
+app.get("/me", requireUser, (req, res) => {
+  const metadata = req.user.user_metadata || {};
+
+  res.json({
+    id: req.user.id,
+    email: req.user.email || null,
+    username:
+      metadata.user_name ||
+      metadata.preferred_username ||
+      metadata.name ||
+      null,
+    avatar_url: metadata.avatar_url || null,
+    provider: req.user.app_metadata?.provider || null,
+  });
 });
 
 app.get("/figma-projects", requireUser, async (req, res) => {
@@ -45,48 +125,306 @@ app.get("/figma-projects", requireUser, async (req, res) => {
   res.json(data);
 });
 
+app.get("/figma-projects/:id", requireUser, async (req, res) => {
+  try {
+    const project = await getUserProject(req.params.id, req.user.id);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/figma-projects", requireUser, async (req, res) => {
-  const {
-    file_url,
-    file_name,
-    selected_frame_id,
-    cached_properties,
-  } = req.body;
+  const { file_url } = req.body;
 
-  const file_key = getFigmaFileKey(file_url);
+  if (!file_url) {
+    return res.status(400).json({
+      error: "A Figma URL is required",
+    });
+  }
 
-  if (!file_url || !file_key) {
+  const parsed = parseFigmaUrl(file_url);
+
+  if (!parsed) {
     return res.status(400).json({
       error: "A valid Figma URL is required",
     });
   }
 
-  const { data, error } = await supabase
-    .from("figma_projects")
-    .upsert(
-      {
-        user_id: req.user.id,
-        file_key,
-        file_url,
-        file_name,
-        selected_frame_id,
-        cached_properties,
-        last_fetched_at: new Date().toISOString(),
-      },
-      {
+  try {
+    const figmaFile = await fetchFigmaFileSummary(parsed.fileKey);
+    const frames = extractFrames(figmaFile);
+
+    const { data: existing, error: existingError } = await supabase
+      .from("figma_projects")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .eq("file_key", parsed.fileKey)
+      .maybeSingle();
+
+    if (existingError) {
+      return res.status(500).json({
+        error: existingError.message,
+      });
+    }
+
+    let selectedFrame = null;
+
+    if (parsed.nodeId) {
+      selectedFrame =
+        frames.find((frame) => frame.id === parsed.nodeId) || null;
+    }
+
+    if (!selectedFrame && existing?.selected_frame_id) {
+      selectedFrame =
+        frames.find(
+          (frame) => frame.id === existing.selected_frame_id
+        ) || null;
+    }
+
+    let cachedProperties = {};
+
+    if (selectedFrame) {
+      const nodeResponse = await fetchFigmaNodes(
+        parsed.fileKey,
+        [selectedFrame.id]
+      );
+
+      cachedProperties =
+        normalizeFetchedNode(nodeResponse, selectedFrame.id) || {};
+    }
+
+    const projectData = {
+      user_id: req.user.id,
+      file_key: parsed.fileKey,
+      file_url,
+      file_name: figmaFile.name || parsed.fileName || null,
+      selected_frame_id: selectedFrame?.id || null,
+      selected_frame_name: selectedFrame?.name || null,
+      figma_version: figmaFile.version || null,
+      frames,
+      cached_properties: cachedProperties,
+      last_modified_at: figmaFile.lastModified || null,
+      last_fetched_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("figma_projects")
+      .upsert(projectData, {
         onConflict: "user_id,file_key",
-      }
-    )
-    .select()
-    .single();
+      })
+      .select()
+      .single();
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.status(existing ? 200 : 201).json(data);
+  } catch (error) {
+    return sendFigmaError(res, error);
   }
-
-  res.status(201).json(data);
 });
 
-app.listen(3000, () => {
-  console.log("Parity backend running on port 3000");
+app.get(
+  "/figma-projects/:id/frames",
+  requireUser,
+  async (req, res) => {
+    try {
+      const project = await getUserProject(
+        req.params.id,
+        req.user.id
+      );
+
+      if (!project) {
+        return res.status(404).json({
+          error: "Project not found",
+        });
+      }
+
+      res.json(project.frames || []);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+app.patch(
+  "/figma-projects/:id/frame",
+  requireUser,
+  async (req, res) => {
+    const { frame_id } = req.body;
+
+    if (!frame_id) {
+      return res.status(400).json({
+        error: "frame_id is required",
+      });
+    }
+
+    try {
+      const project = await getUserProject(
+        req.params.id,
+        req.user.id
+      );
+
+      if (!project) {
+        return res.status(404).json({
+          error: "Project not found",
+        });
+      }
+
+      const frame = (project.frames || []).find(
+        (item) => item.id === frame_id
+      );
+
+      if (!frame) {
+        return res.status(400).json({
+          error: "That frame does not belong to this Figma project",
+        });
+      }
+
+      const nodeResponse = await fetchFigmaNodes(
+        project.file_key,
+        [frame.id]
+      );
+
+      const cachedProperties =
+        normalizeFetchedNode(nodeResponse, frame.id);
+
+      if (!cachedProperties) {
+        return res.status(502).json({
+          error: "Figma did not return the selected frame",
+        });
+      }
+
+      const { data, error } = await supabase
+        .from("figma_projects")
+        .update({
+          selected_frame_id: frame.id,
+          selected_frame_name: frame.name,
+          cached_properties: cachedProperties,
+          last_fetched_at: new Date().toISOString(),
+        })
+        .eq("id", project.id)
+        .eq("user_id", req.user.id)
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({
+          error: error.message,
+        });
+      }
+
+      res.json(data);
+    } catch (error) {
+      return sendFigmaError(res, error);
+    }
+  }
+);
+
+app.post(
+  "/figma-projects/:id/refresh",
+  requireUser,
+  async (req, res) => {
+    try {
+      const project = await getUserProject(
+        req.params.id,
+        req.user.id
+      );
+
+      if (!project) {
+        return res.status(404).json({
+          error: "Project not found",
+        });
+      }
+
+      const figmaFile = await fetchFigmaFileSummary(
+        project.file_key
+      );
+
+      const frames = extractFrames(figmaFile);
+
+      const selectedFrame = project.selected_frame_id
+        ? frames.find(
+            (frame) => frame.id === project.selected_frame_id
+          ) || null
+        : null;
+
+      let cachedProperties = {};
+
+      if (selectedFrame) {
+        const nodeResponse = await fetchFigmaNodes(
+          project.file_key,
+          [selectedFrame.id]
+        );
+
+        cachedProperties =
+          normalizeFetchedNode(
+            nodeResponse,
+            selectedFrame.id
+          ) || {};
+      }
+
+      const { data, error } = await supabase
+        .from("figma_projects")
+        .update({
+          file_name: figmaFile.name || project.file_name,
+          selected_frame_id: selectedFrame?.id || null,
+          selected_frame_name: selectedFrame?.name || null,
+          figma_version: figmaFile.version || null,
+          frames,
+          cached_properties: cachedProperties,
+          last_modified_at: figmaFile.lastModified || null,
+          last_fetched_at: new Date().toISOString(),
+        })
+        .eq("id", project.id)
+        .eq("user_id", req.user.id)
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({
+          error: error.message,
+        });
+      }
+
+      res.json(data);
+    } catch (error) {
+      return sendFigmaError(res, error);
+    }
+  }
+);
+
+app.delete("/figma-projects/:id", requireUser, async (req, res) => {
+  const { data, error } = await supabase
+    .from("figma_projects")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return res.status(500).json({
+      error: error.message,
+    });
+  }
+
+  if (!data) {
+    return res.status(404).json({
+      error: "Project not found",
+    });
+  }
+
+  res.status(204).end();
+});
+
+app.listen(port, () => {
+  console.log(`Parity backend running on port ${port}`);
 });
