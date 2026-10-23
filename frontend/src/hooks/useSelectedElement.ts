@@ -16,10 +16,13 @@ export function useSelectedElement(onPick: (el: ElementSnapshot) => void): boole
   useEffect(() => {
     if (!dt) return;
     const read = () =>
-      dt.inspectedWindow.eval(COLLECT, (result, info) => {
-        if (!result || info?.isError || info?.isException) return;
-        latest.current(result as ElementSnapshot);
-      });
+      dt.inspectedWindow.eval<ElementSnapshot | null>(
+        COLLECT,
+        (result, info) => {
+          if (!result || info.isError || info.isException) return;
+          latest.current(result);
+        }
+      );
     dt.panels.elements.onSelectionChanged.addListener(read);
     return () => dt.panels.elements.onSelectionChanged.removeListener(read);
   }, [dt]);
