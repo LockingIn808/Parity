@@ -2,6 +2,10 @@ const express = require("express");
 const supabase = require("./supabase");
 const { compareElement } = require("./compare");
 const {
+  scoreAccessibility,
+  getAccessibilityIssues,
+} = require("./accessibility");
+const {
   parseFigmaUrl,
   fetchFigmaFileSummary,
   fetchFigmaNodes,
@@ -489,6 +493,9 @@ app.post("/compare/element", requireUser, async (req, res) => {
       nodes,
       figmaNodeId: figma_node_id,
     });
+    const accessibility =
+      scoreAccessibility(element);
+
 
     res.json({
       project: {
@@ -504,6 +511,10 @@ app.post("/compare/element", requireUser, async (req, res) => {
         text: element.text || null,
       },
       ...result,
+      accessibility_score: accessibility.total,
+      accessibility_categories: accessibility.parts,
+      accessibility_issues:
+        getAccessibilityIssues(accessibility),
     });
   } catch (error) {
     if (
