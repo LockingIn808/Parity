@@ -24,9 +24,44 @@ const toCard = (title: string, r: ScoreResult, good: string): CardData => ({
 // 0 = needs a fix, 1 = passes, 2 = does not apply
 const rank = (p: PartResult) => (p.fraction === null ? 2 : p.fraction >= 1 ? 1 : 0);
 
-/** Same look as "Changes to Prioritize": icon tile, title, one-line subtitle, small button. */
-function Findings({ parts }: { parts: PartResult[] }) {
+/** One side of the Preview: a color swatch for every #hex in the text, then the text. */
+function Tile({ label, text, site }: { label: string; text: string; site?: boolean }) {
+  const hexes = text.match(/#[0-9a-fA-F]{6}/g) ?? [];
+  return (
+    <div
+      className="force-light min-w-0 flex-1 rounded-xl px-3 py-2"
+      style={{ background: site ? "#FFF8EE" : "#F6F3FF" }}
+    >
+      <div className="text-[11px] font-bold tracking-wide" style={{ color: site ? "#8A5200" : "#5A32C6" }}>
+        {label}
+      </div>
+      <div className="mt-1 flex items-center gap-1.5">
+        {hexes.map((h, i) => (
+          <i
+            key={i}
+            className="h-3.5 w-3.5 flex-none rounded border border-black/10"
+            style={{ background: h }}
+          />
+        ))}
+        <span className="min-w-0 break-words text-[11px] font-semibold text-[var(--ink2)]">{text || "—"}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Same look as "Changes to Prioritize": icon tile, title, one-line subtitle, Preview + Commit. */
+function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [done, setDone] = useState<Set<string>>(new Set());
+
+  // TODO(real data): Commit should apply the change (write to code, open a PR) and persist.
+  const toggleDone = (id: string) =>
+    setDone((s) => {
+      const n = new Set(s);
+      if (!n.delete(id)) n.add(id);
+      return n;
+    });
+
   const rows = [...parts].sort((a, b) => rank(a) - rank(b));
   const failing = rows.filter((p) => rank(p) === 0).length;
 
@@ -35,11 +70,12 @@ function Findings({ parts }: { parts: PartResult[] }) {
       <h3 className="mb-2 text-sm font-semibold text-[var(--ink)]">
         {failing > 0 ? "Changes to Prioritize" : "All checks"}
       </h3>
-      <ul className="scroll max-h-52 overflow-y-auto pr-2">
+      <ul className="scroll max-h-60 overflow-y-auto pr-2">
         {rows.map((p) => {
           const r = rank(p);
           const ink = luma(p.color) > 0.6 ? "#3A1F78" : "#fff";
           const isOpen = open === p.id;
+          const isDone = done.has(p.id);
           return (
             <li key={p.id} className="border-t border-[var(--line)] first:border-t-0">
               <div className="flex items-center gap-2.5 py-1.5">
@@ -58,20 +94,34 @@ function Findings({ parts }: { parts: PartResult[] }) {
                   </p>
                 </div>
                 {r === 0 ? (
-                  <PillButton
-                    variant={isOpen ? "ghostOn" : "ghost"}
-                    aria-expanded={isOpen}
-                    onClick={() => setOpen(isOpen ? null : p.id)}
-                  >
-                    Details
-                  </PillButton>
+                  <>
+                    <PillButton
+                      variant={isOpen ? "ghostOn" : "ghost"}
+                      aria-expanded={isOpen}
+                      onClick={() => setOpen(isOpen ? null : p.id)}
+                    >
+                      Preview
+                    </PillButton>
+                    <PillButton
+                      variant={isDone ? "soft" : "primary"}
+                      onClick={() => toggleDone(p.id)}
+                      className="sm:min-w-[84px]"
+                    >
+                      {isDone ? "Committed ✓" : "Commit"}
+                    </PillButton>
+                  </>
                 ) : r === 1 ? (
                   <span className={`${chip} bg-[var(--badge-bg)] text-[var(--badge-text)]`}>Pass ✓</span>
                 ) : (
                   <span className={`${chip} bg-[var(--card-soft)] text-[var(--muted)]`}>N/A</span>
                 )}
               </div>
-              {isOpen && <p className="pb-2 pl-[34px] text-[11px] text-[var(--muted)]">{p.note}</p>}
+              {isOpen && r === 0 && (
+                <div className="flex gap-2 pb-2">
+                  <Tile label={goalLabel} text={p.goal} />
+                  <Tile label="YOUR SITE" text={p.site} site />
+                </div>
+              )}
             </li>
           );
         })}
@@ -87,7 +137,8 @@ interface Props {
 }
 
 export default function ElementScore({ el, tab, onBack }: Props) {
-  const result = tab === "design" ? scoreDesign(el, specFor(el)) : scoreAccessibility(el);
+  const isDesign = tab === "design";
+  const result = isDesign ? scoreDesign(el, specFor(el)) : scoreAccessibility(el);
 
   return (
     <div className="space-y-3">
@@ -104,19 +155,32 @@ export default function ElementScore({ el, tab, onBack }: Props) {
             <p className="truncate text-xs font-bold">{el.selector}</p>
             <p className="truncate text-[11px] text-[var(--muted)]">{el.text || el.name || "No text"}</p>
           </div>
+          {isDesign && (
+            <span className="flex-none rounded-full bg-[#FFF1DC] px-2 py-[2px] text-[10px] font-bold text-[#8A5200]">
+              Sample Figma data
+            </span>
+          )}
         </div>
       </section>
 
       <ScoreBreakdown
         card={
-          tab === "design"
+          isDesign
             ? toCard("Design Comparison", result, "Similar")
             : toCard("Accessibility Score", result, "Accessible")
         }
       />
-      <Findings key={tab} parts={result.parts} />
 
-      {tab === "design" && (
+      {!isDesign && result.checked === 0 && (
+        <p className="px-1 text-[11px] text-[var(--muted)]">
+          This element has no text, image or control to check, so only the page-level check ran. Select a button,
+          link, image or piece of text to see a real score.
+        </p>
+      )}
+
+      <Findings key={tab} parts={result.parts} goalLabel={isDesign ? "FIGMA" : "GOAL"} />
+
+      {isDesign && (
         <p className="px-1 text-[11px] text-[var(--muted)]">
           The design score compares against sample Figma values until your Figma file data is connected.
         </p>

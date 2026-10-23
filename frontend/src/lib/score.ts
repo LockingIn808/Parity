@@ -20,12 +20,15 @@ export interface PartResult {
   fraction: number | null; // 0..1, null = does not apply to this element
   note: string;
   fix: string;
+  site: string; // what the page has now
+  goal: string; // what it should have (the Figma value, or the accessibility target)
 }
 
 export interface ScoreResult {
   total: number; // 0..100
   parts: PartResult[];
   slices: { id: string; name: string; color: string; value: number }[];
+  checked: number; // checks that apply to this element (the page-level "Other" check does not count)
 }
 
 const C = ["#7C5CE8", "#9D86F2", "#B7A3F5", "#EFB87A", "#F7D9B4"];
@@ -58,26 +61,31 @@ const part = (
   weight: number,
   fraction: number | null,
   note: string,
-  fix = ""
-): PartResult => ({ id, name, color, weight, fraction, note, fix });
+  fix = "",
+  site = "",
+  goal = ""
+): PartResult => ({ id, name, color, weight, fraction, note, fix, site, goal });
 
-/** Parts that do not apply are dropped and the rest are rescaled to 100. */
+/**
+ * Parts that do not apply are dropped and the rest are rescaled to 100.
+ * Slice percentages use the largest-remainder method, so they always add up to the
+ * rounded total (a perfect element is exactly 100%, never 99% with a stray "To go 1%").
+ */
 function finish(parts: PartResult[]): ScoreResult {
   const live = parts.filter((p) => p.fraction !== null);
   const W = live.reduce((n, p) => n + p.weight, 0) || 1;
-  const slices = live.map((p) => ({
-    id: p.id,
-    name: p.name,
-    color: p.color,
-    value: Math.round((((p.fraction ?? 0) * p.weight) / W) * 100),
-  }));
-  let sum = slices.reduce((n, s) => n + s.value, 0);
-  while (sum > 100) {
-    const big = slices.reduce((a, b) => (b.value > a.value ? b : a));
-    big.value -= 1;
-    sum -= 1;
+  const exact = live.map((p) => (((p.fraction ?? 0) * p.weight) / W) * 100);
+  const total = Math.round(exact.reduce((n, x) => n + x, 0));
+  const values = exact.map((x) => Math.floor(x));
+  let left = total - values.reduce((n, v) => n + v, 0);
+  const order = exact.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r);
+  for (const o of order) {
+    if (left <= 0) break;
+    values[o.i] += 1;
+    left -= 1;
   }
-  return { total: sum, parts, slices };
+  const slices = live.map((p, i) => ({ id: p.id, name: p.name, color: p.color, value: values[i] }));
+  return { total, parts, slices, checked: live.filter((p) => p.id !== "other").length };
 }
 
 export function scoreAccessibility(s: ElementSnapshot): ScoreResult {
@@ -88,11 +96,14 @@ export function scoreAccessibility(s: ElementSnapshot): ScoreResult {
     const large = s.fontSize >= 24 || (s.fontSize >= 18.66 && s.fontWeight >= 700);
     const need = large ? 3 : 4.5;
     const shown = Math.floor(ratio * 10) / 10;
+    const pass = ratio >= need;
     contrast = part(
       "contrast", "Contrast", C[0], 30,
-      clamp01(ratio / need),
+      pass ? 1 : clamp01((ratio - 1) / (need - 1)),
       `${s.color} on ${s.background} is ${shown}:1 (needs ${need}:1)`,
-      ratio >= need ? "" : "Use a darker text color or a lighter background."
+      pass ? "" : "Use a darker text color or a lighter background.",
+      `${s.color} on ${s.background} · ${shown}:1`,
+      `${need}:1 or higher`
     );
   } else {
     contrast = part("contrast", "Contrast", C[0], 30, null, "No text directly in this element.");
@@ -106,14 +117,18 @@ export function scoreAccessibility(s: ElementSnapshot): ScoreResult {
       labels = part(
         "labels", "Labels", C[1], 25, ok ? 1 : 0,
         ok ? (s.name ? `alt text: "${s.name.slice(0, 40)}"` : "Empty alt marks it as decorative.") : "Image has no alt attribute.",
-        ok ? "" : 'Add alt="..." describing the image (alt="" if decorative).'
+        ok ? "" : 'Add alt="..." describing the image (alt="" if decorative).',
+        s.hasAlt ? (s.name ? `alt="${s.name.slice(0, 30)}"` : 'alt="" (decorative)') : "No alt attribute",
+        "Descriptive alt text"
       );
     } else {
       const ok = !!s.name;
       labels = part(
         "labels", "Labels", C[1], 25, ok ? 1 : 0,
         ok ? `Accessible name: "${s.name.slice(0, 40)}"` : "No accessible name.",
-        ok ? "" : "Add visible text or an aria-label."
+        ok ? "" : "Add visible text or an aria-label.",
+        ok ? `"${s.name.slice(0, 30)}"` : "No accessible name",
+        "A clear name"
       );
     }
   } else {
@@ -124,19 +139,25 @@ export function scoreAccessibility(s: ElementSnapshot): ScoreResult {
   let semantics: PartResult;
   if (s.interactive) {
     if (s.native) {
-      semantics = part("semantics", "Semantics", C[2], 20, 1, `Native <${s.tag}> is announced as ${s.role || "a control"}.`);
+      semantics = part(
+        "semantics", "Semantics", C[2], 20, 1,
+        `Native <${s.tag}> is announced as ${s.role || "a control"}.`, "",
+        `<${s.tag}>`, `<${s.tag}>`
+      );
     } else if (s.explicitRole) {
       const kb = s.tabindex !== null && s.tabindex >= 0;
       semantics = part(
         "semantics", "Semantics", C[2], 20, kb ? 0.7 : 0.4,
         `role="${s.explicitRole}" on a <${s.tag}>${kb ? "" : " with no tabindex"}.`,
-        "Use a native <button> or <a href> so keyboard and screen readers work for free."
+        "Use a native <button> or <a href> so keyboard and screen readers work for free.",
+        `<${s.tag} role="${s.explicitRole}">`, "<button> or <a href>"
       );
     } else {
       semantics = part(
         "semantics", "Semantics", C[2], 20, 0,
         `Clickable <${s.tag}> is announced as plain text.`,
-        `Use a <button> (or <a href>) instead of a <${s.tag}>.`
+        `Use a <button> (or <a href>) instead of a <${s.tag}>.`,
+        `<${s.tag}> (plain text)`, "<button> or <a href>"
       );
     }
   } else {
@@ -151,7 +172,8 @@ export function scoreAccessibility(s: ElementSnapshot): ScoreResult {
     interaction = part(
       "interaction", "Interaction", C[3], 15, f,
       `${s.width} × ${s.height} px target (44 × 44 recommended).`,
-      f >= 1 ? "" : "Make the clickable area at least 44 × 44 px (padding works)."
+      f >= 1 ? "" : "Make the clickable area at least 44 × 44 px (padding works).",
+      `${s.width} × ${s.height} px`, "44 × 44 px"
     );
   } else {
     interaction = part("interaction", "Interaction", C[3], 15, null, "Not an interactive element.");
@@ -166,7 +188,9 @@ export function scoreAccessibility(s: ElementSnapshot): ScoreResult {
   const otherPart = part(
     "other", "Other", C[4], 10, Math.max(0, other),
     problems.length ? problems.join(" ") : "Page language is set, no tab-order or hidden-focus problems.",
-    problems.length ? "Fix the items above." : ""
+    problems.length ? "Fix the items above." : "",
+    problems.length ? problems.join(" ") : "No problems found",
+    "lang set, sensible tab order"
   );
 
   return finish([contrast, labels, semantics, interaction, otherPart]);
@@ -190,7 +214,7 @@ export function scoreDesign(s: ElementSnapshot, spec: DesignSpec): ScoreResult {
   }
   const fonts = fBits.length
     ? part("fonts", "Fonts", C[0], 30, avg(fBits), `Site: ${fSite.join(" ")} | Figma: ${fFigma.join(" ")}`,
-        avg(fBits) >= 1 ? "" : `Change the site to ${fFigma.join(" ")}.`)
+        avg(fBits) >= 1 ? "" : `Change the site to ${fFigma.join(" ")}.`, fSite.join(" "), fFigma.join(" "))
     : part("fonts", "Fonts", C[0], 30, null, "No font in the Figma data.");
 
   // Color (25)
@@ -214,7 +238,7 @@ export function scoreDesign(s: ElementSnapshot, spec: DesignSpec): ScoreResult {
   }
   const color = cBits.length
     ? part("color", "Color", C[1], 25, avg(cBits), `Site: ${cSite.join(", ")} | Figma: ${cFigma.join(", ")}`,
-        avg(cBits) >= 1 ? "" : `Use ${cFigma.join(", ")}.`)
+        avg(cBits) >= 1 ? "" : `Use ${cFigma.join(", ")}.`, cSite.join(", "), cFigma.join(", "))
     : part("color", "Color", C[1], 25, null, "No colors in the Figma data.");
 
   // Spacing (20)
@@ -234,7 +258,7 @@ export function scoreDesign(s: ElementSnapshot, spec: DesignSpec): ScoreResult {
   }
   const spacing = sBits.length
     ? part("spacing", "Spacing", C[2], 20, avg(sBits), `Site: ${sSite.join(", ")} | Figma: ${sFigma.join(", ")}`,
-        avg(sBits) >= 1 ? "" : `Set ${sFigma.join(", ")}.`)
+        avg(sBits) >= 1 ? "" : `Set ${sFigma.join(", ")}.`, sSite.join(", "), sFigma.join(", "))
     : part("spacing", "Spacing", C[2], 20, null, "No spacing in the Figma data.");
 
   // Sizing (25)
@@ -253,7 +277,7 @@ export function scoreDesign(s: ElementSnapshot, spec: DesignSpec): ScoreResult {
   }
   const sizing = zBits.length
     ? part("sizing", "Sizing", C[3], 25, avg(zBits), `Site: ${zSite.join(", ")} | Figma: ${zFigma.join(", ")}`,
-        avg(zBits) >= 1 ? "" : `Resize to ${zFigma.join(", ")}.`)
+        avg(zBits) >= 1 ? "" : `Resize to ${zFigma.join(", ")}.`, zSite.join(", "), zFigma.join(", "))
     : part("sizing", "Sizing", C[3], 25, null, "No size in the Figma data.");
 
   return finish([fonts, color, spacing, sizing]);

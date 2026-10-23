@@ -7,7 +7,6 @@ import { initialsOf } from "./lib/github";
 import type { ElementSnapshot } from "./lib/inspect";
 import LandingPage from "./components/LandingPage";
 import ConnectionStatus from "./components/ConnectionStatus";
-import PillButton from "./components/PillButton";
 import ProfileMenu from "./components/ProfileMenu";
 import TabBar from "./components/TabBar";
 import GithubLogin from "./pages/GithubLogin";
@@ -30,22 +29,18 @@ export default function App() {
   const [tab, setTab] = useState<TabId>("figma");
   const [detail, setDetail] = useState<string | null>(null); // a Part id, e.g. "fonts"
   const [account, setAccount] = useState(false); // true = the Settings page is showing
-  const [element, setElement] = useState<ElementSnapshot | null>(null); // picked on the website
+  const [element, setElement] = useState<ElementSnapshot | null>(null); // selected on the website
   const [figmaError, setFigmaError] = useState(false);
   const [loaded, setLoaded] = useState(false); // Figma data finished loading
   const [booted, setBooted] = useState(false);
 
-  // An element was picked: show its scores on the Design or Accessibility tab.
-  const showElement = (snap: ElementSnapshot) => {
+  // An element was selected with the inspect tool: show its scores on the Design or Accessibility tab.
+  const inDevtools = useSelectedElement((snap) => {
+    if (screen !== "app") return;
     setElement(snap);
     setAccount(false);
     setDetail(null);
     setTab((t) => (t === "figma" ? "design" : t));
-  };
-
-  const { inDevtools, picking, pickError, startPick, cancelPick } = useSelectedElement((snap) => {
-    if (screen !== "app") return;
-    showElement(snap);
   });
 
   // Apply the theme to <html> so index.css can switch its colors.
@@ -155,8 +150,6 @@ export default function App() {
     );
   }
 
-  const showPicker = inDevtools && !account && tab !== "figma";
-
   return (
     <div className="parity-bg parity-dashboard">
       <div className="parity-inner mx-auto w-full max-w-[560px] space-y-3 p-4">
@@ -185,24 +178,12 @@ export default function App() {
 
         <TabBar tabs={TABS} active={account ? null : tab} onChange={pickTab} />
 
-        {/* Pick an element without leaving Parity */}
-        {showPicker && (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-[var(--muted)]">
-              {picking
-                ? "Click any element on the page. Esc cancels."
-                : pickError
-                  ? "Couldn't start the picker on this page."
-                  : "Pick an element on the page to score it."}
-            </p>
-            <PillButton
-              variant={picking ? "ghostOn" : "ghost"}
-              onClick={picking ? cancelPick : startPick}
-              className="flex-none"
-            >
-              {picking ? "Cancel" : "Pick element"}
-            </PillButton>
-          </div>
+        {/* Tells you how to select an element. Hidden once one is selected. */}
+        {inDevtools && !account && !element && tab !== "figma" && (
+          <p className="px-1 text-[11px] text-[var(--muted)]">
+            Select an element on the page with Chrome’s inspect tool (the arrow icon at the top left of DevTools),
+            then come back to this tab to see its scores.
+          </p>
         )}
 
         {account ? (
