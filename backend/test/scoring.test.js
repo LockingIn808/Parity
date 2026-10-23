@@ -201,3 +201,23 @@ test("style fixes return CSS and Tailwind corrections", () => {
     )
   );
 });
+test("font weight differences do not change the design score", () => {
+  const differentWeight = {
+    ...element,
+    fontWeight: 400,
+  };
+
+  const result = compareElement({
+    element: differentWeight,
+    nodes: [matchingNode],
+    figmaNodeId: "1:1",
+  });
+
+  assert.equal(result.design_score, 100);
+
+  assert.ok(
+    result.suggested_fixes.some(
+      (fix) => fix.property === "fontWeight"
+    )
+  );
+});

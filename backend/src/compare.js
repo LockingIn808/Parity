@@ -174,24 +174,6 @@ function scoreDesign(element, spec) {
     expectedFonts.push(px(spec.fontSize));
   }
 
-  if (
-    spec.fontWeight !== undefined &&
-    typeof element.fontWeight === "number"
-  ) {
-    fontBits.push(
-      clamp01(
-        1 -
-          Math.abs(
-            element.fontWeight - spec.fontWeight
-          ) /
-            500
-      )
-    );
-
-    currentFonts.push(`weight ${element.fontWeight}`);
-    expectedFonts.push(`weight ${spec.fontWeight}`);
-  }
-
   const fonts = fontBits.length
     ? makePart(
         "fonts",
