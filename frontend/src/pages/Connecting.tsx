@@ -9,7 +9,8 @@ import star from '../assets/star.png';
 const SPARK = 'M12 1 Q14 10 23 12 Q14 14 12 23 Q10 14 1 12 Q10 10 12 1Z';
 const T0 = 0.4, T1 = 2.8;          // the spiral runs from T0 to T1 seconds
 const CX = 150.2, CY = 224.4;      // centre of the P's star inside the scene
-const CYCLE = 4.8, MIN = 3.6;      // loop length, earliest exit
+const CYCLE = 4.8;                 // loop length
+const FINISH = 0.4;                // seconds for the bar to fill once the data is in
 const DESIGN = '#8F72F0', CODE = '#F0B25E';
 
 const TWINKLES = [[92, 52, '#B7A3F5'], [250, 110, CODE], [44, 372, CODE], [262, 350, '#B7A3F5'], [196, 436, '#B7A3F5'], [70, 150, '#B7A3F5']] as const;
@@ -32,6 +33,8 @@ interface Props { ready: boolean; onDone: () => void; onCancel: () => void }
 export default function Connecting({ ready, onDone, onCancel }: Props) {
   const els = useRef<Record<string, El | null>>({});
   const finished = useRef(false);
+  const doneAt = useRef<{ t: number; from: number } | null>(null);
+  const progress = useRef(0);
   const ref = (id: string): RefFn => (el) => { els.current[id] = el; };
 
   useFrame((t) => {
@@ -104,13 +107,23 @@ export default function Connecting({ ready, onDone, onCancel }: Props) {
       e.style.opacity = o.toFixed(2);
     });
 
-    // leave once the data is in and the current spiral has finished
-    if (ready && t >= MIN && u >= MIN && !finished.current) { finished.current = true; onDone(); }
+    // progress bar: eases toward 90% while loading, then fills up and leaves
+    let prog: number;
+    if (!ready) {
+      prog = 0.9 * (1 - Math.exp(-t / 2.5));
+    } else {
+      if (!doneAt.current) doneAt.current = { t, from: progress.current };
+      const k = ease(clamp((t - doneAt.current.t) / FINISH));
+      prog = doneAt.current.from + (1 - doneAt.current.from) * k;
+      if (k >= 1 && !finished.current) { finished.current = true; onDone(); }
+    }
+    progress.current = prog;
+    const bar = g('bar'); if (bar) bar.style.width = (prog * 100).toFixed(1) + '%';
+    const pb = g('pb'); if (pb) pb.setAttribute('aria-valuenow', String(Math.round(prog * 100)));
   });
 
   return (
     <Screen>
-      <p role="status" className="sr-only">Connecting to Figma</p>
       <div className="relative mx-auto my-auto h-[496px] w-[312px] flex-none overflow-hidden" aria-hidden="true">
         <div ref={ref('lglow')} className="absolute rounded-full" style={{ left: 46, top: 120, width: 220, height: 220, background: 'radial-gradient(circle, rgba(124,92,255,.38) 0%, rgba(124,92,255,0) 68%)' }} />
         <div ref={ref('lmg')} className="absolute rounded-full" style={{ left: 12, top: 22, width: 60, height: 60, background: 'radial-gradient(circle, rgba(240,178,94,.55) 0%, rgba(240,178,94,0) 70%)' }} />
@@ -147,6 +160,27 @@ export default function Connecting({ ready, onDone, onCancel }: Props) {
           </div>
         ))}
       </div>
+
+      {/* loading bar */}
+      <div className="mx-auto mb-4 w-full max-w-[220px]">
+        <div
+          ref={ref('pb')}
+          role="progressbar"
+          aria-label="Loading your Figma file"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={0}
+          className="h-1.5 overflow-hidden rounded-full bg-[var(--track)]"
+        >
+          <div
+            ref={ref('bar')}
+            className="h-full rounded-full"
+            style={{ width: '0%', background: `linear-gradient(90deg, ${DESIGN}, ${CODE})` }}
+          />
+        </div>
+        <p className="mt-2 text-center text-[11px] text-[var(--muted)]">Loading your Figma file…</p>
+      </div>
+
       <button type="button" onClick={onCancel} className="py-0.5 text-center text-xs font-bold text-[var(--p1)]">Cancel</button>
     </Screen>
   );

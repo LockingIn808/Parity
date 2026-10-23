@@ -4,9 +4,9 @@ const P1 = "#5A32C6", P2 = "#8F72F0", P3 = "#B7A3F5", P4 = "#EFB87A", P5 = "#F7D
 
 export const design: Report = {
   key: "design",
-  title: "Design Comparison",
+  title: "Design Similarity Score",
   goodLabel: "Similar",
-  remainderLabel: "Still different",
+  remainderLabel: "Remaining differences",
   detailRemainderLabel: "Different",
   parts: [
     { id: "fonts",   name: "Fonts",   share: 14, weight: 30, color: P1, fixLabel: "Font change" },
@@ -32,7 +32,7 @@ export const accessibility: Report = {
   key: "accessibility",
   title: "Accessibility Score",
   goodLabel: "Accessible",
-  remainderLabel: "Still to fix",
+  remainderLabel: "Remaining issues",
   detailRemainderLabel: "Needs fixing",
   parts: [
     { id: "contrast",    name: "Contrast",    share: 28, weight: 34, color: P1, fixLabel: "Contrast fix" },

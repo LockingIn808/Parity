@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TABS, type Screen, type Session, type TabId, type Theme } from "./global";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useSelectedElement } from "./hooks/useSelectedElement";
@@ -79,6 +79,8 @@ export default function App() {
     setElement(null);
   };
 
+  const loadId = useRef(0);
+
   const connect = async (url: string) => {
     const ref = parseFigma(url);
     setSession((s) => ({ ...s, url }));
@@ -89,11 +91,25 @@ export default function App() {
     setFigmaError(false);
     setSession((s) => ({ ...s, url, file: ref.name }));
     setLoaded(false);
-    setScreen("connecting");
+
+    const id = ++loadId.current;
+    // Only show the loading screen if loading takes longer than this
+    let slow = false;
+    const timer = setTimeout(() => {
+      if (loadId.current !== id) return;
+      slow = true;
+      setScreen("connecting");
+    }, 400);
+
     try {
       await loadFigmaFile(ref.key);
-      setLoaded(true);
+      clearTimeout(timer);
+      if (loadId.current !== id) return; // cancelled or replaced
+      if (slow) setLoaded(true); // the loading screen fills its bar, then moves on
+      else goTab("design");      // fast load: skip the loading screen entirely
     } catch {
+      clearTimeout(timer);
+      if (loadId.current !== id) return;
       setScreen("app");
       setTab("figma");
       setFigmaError(true);
@@ -132,6 +148,7 @@ export default function App() {
           goTab("design");
         }}
         onCancel={() => {
+          loadId.current++; 
           setScreen("app");
           goTab("figma");
         }}
