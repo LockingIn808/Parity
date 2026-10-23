@@ -1,3 +1,5 @@
+const { buildStyleFixes } = require("./fixes");
+
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
@@ -610,6 +612,10 @@ function compareElement({
     element,
     designSpec
   );
+  const fixes = buildStyleFixes(
+    element,
+    designSpec
+    );
 
   return {
     matched_node: {
@@ -624,7 +630,8 @@ function compareElement({
     design_score: designScore.total,
     categories: designScore.parts,
     mismatches: getMismatches(designScore),
-  };
+    ...fixes,
+    };
 }
 
 module.exports = {

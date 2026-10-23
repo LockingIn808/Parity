@@ -135,3 +135,69 @@ test("black on white contrast is approximately 21 to 1", () => {
 
   assert.ok(Math.abs(ratio - 21) < 0.01);
 });
+
+test("style fixes return CSS and Tailwind corrections", () => {
+  const mismatchedElement = {
+    ...element,
+    selector: ".signup-btn",
+    fontSize: 12,
+    background: "#000000",
+    width: 80,
+    borderRadius: 2,
+  };
+
+  const targetNode = {
+    ...matchingNode,
+    font_size: 16,
+    background: "#FFFFFF",
+    width: 96,
+    corner_radius: 8,
+  };
+
+  const result = compareElement({
+    element: mismatchedElement,
+    nodes: [targetNode],
+    figmaNodeId: "1:1",
+  });
+
+  const properties = result.suggested_fixes.map(
+    (fix) => fix.property
+  );
+
+  assert.ok(properties.includes("fontSize"));
+  assert.ok(properties.includes("background"));
+  assert.ok(properties.includes("width"));
+  assert.ok(properties.includes("borderRadius"));
+
+  assert.equal(
+    result.css_fixes["font-size"],
+    "16px"
+  );
+
+  assert.equal(
+    result.css_fixes["background-color"],
+    "#FFFFFF"
+  );
+
+  assert.equal(result.css_fixes.width, "96px");
+
+  assert.equal(
+    result.css_fixes["border-radius"],
+    "8px"
+  );
+
+  assert.match(
+    result.css_fix_rule,
+    /\.signup-btn/
+  );
+
+  assert.ok(
+    result.tailwind_classes.includes("text-[16px]")
+  );
+
+  assert.ok(
+    result.tailwind_classes.includes(
+      "rounded-[8px]"
+    )
+  );
+});
