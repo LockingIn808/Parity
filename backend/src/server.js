@@ -604,6 +604,26 @@ app.delete("/figma-projects/:id", requireUser, async (req, res) => {
   res.status(204).end();
 });
 
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+  });
+});
+
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
+    return res.status(400).json({
+      error: "Invalid JSON body",
+    });
+  }
+
+  console.error(error);
+
+  return res.status(500).json({
+    error: "Unexpected server error",
+  });
+});
+
 app.listen(port, () => {
   console.log(`Parity backend running on port ${port}`);
 });
