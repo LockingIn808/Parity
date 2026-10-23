@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { TABS, type Screen, type Session, type TabId, type Theme } from "./global";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useSelectedElement } from "./hooks/useSelectedElement";
 import { parseFigma, loadFigmaFile } from "./lib/figma";
 import { initialsOf } from "./lib/github";
-import { SAMPLE_ELEMENT, type ElementSnapshot } from "./lib/inspect";
+import type { ElementSnapshot } from "./lib/inspect";
 import LandingPage from "./components/LandingPage";
 import ConnectionStatus from "./components/ConnectionStatus";
+import PillButton from "./components/PillButton";
 import ProfileMenu from "./components/ProfileMenu";
 import TabBar from "./components/TabBar";
 import GithubLogin from "./pages/GithubLogin";
@@ -34,12 +35,17 @@ export default function App() {
   const [loaded, setLoaded] = useState(false); // Figma data finished loading
   const [booted, setBooted] = useState(false);
 
-  // Clicking an element with the inspect tool opens its scores.
-  const inDevtools = useSelectedElement((snap) => {
-    if (screen !== "app") return;
+  // An element was picked: show its scores on the Design or Accessibility tab.
+  const showElement = (snap: ElementSnapshot) => {
     setElement(snap);
     setAccount(false);
     setDetail(null);
+    setTab((t) => (t === "figma" ? "design" : t));
+  };
+
+  const { inDevtools, picking, pickError, startPick, cancelPick } = useSelectedElement((snap) => {
+    if (screen !== "app") return;
+    showElement(snap);
   });
 
   // Apply the theme to <html> so index.css can switch its colors.
@@ -65,6 +71,16 @@ export default function App() {
     setFigmaError(false);
   };
 
+  // With an element selected, Design/Accessibility switch views but keep the element.
+  const pickTab = (t: TabId) => {
+    if (element && t !== "figma") {
+      setTab(t);
+      setAccount(false);
+      return;
+    }
+    goTab(t);
+  };
+
   const signIn = (user: string) => {
     setSession((s) => ({ ...s, user }));
     setScreen("githubAuth");
@@ -79,8 +95,6 @@ export default function App() {
     setElement(null);
   };
 
-  const loadId = useRef(0);
-
   const connect = async (url: string) => {
     const ref = parseFigma(url);
     setSession((s) => ({ ...s, url }));
@@ -91,25 +105,11 @@ export default function App() {
     setFigmaError(false);
     setSession((s) => ({ ...s, url, file: ref.name }));
     setLoaded(false);
-
-    const id = ++loadId.current;
-    // Only show the loading screen if loading takes longer than this
-    let slow = false;
-    const timer = setTimeout(() => {
-      if (loadId.current !== id) return;
-      slow = true;
-      setScreen("connecting");
-    }, 400);
-
+    setScreen("connecting");
     try {
       await loadFigmaFile(ref.key);
-      clearTimeout(timer);
-      if (loadId.current !== id) return; // cancelled or replaced
-      if (slow) setLoaded(true); // the loading screen fills its bar, then moves on
-      else goTab("design");      // fast load: skip the loading screen entirely
+      setLoaded(true);
     } catch {
-      clearTimeout(timer);
-      if (loadId.current !== id) return;
       setScreen("app");
       setTab("figma");
       setFigmaError(true);
@@ -148,13 +148,14 @@ export default function App() {
           goTab("design");
         }}
         onCancel={() => {
-          loadId.current++; 
           setScreen("app");
           goTab("figma");
         }}
       />
     );
   }
+
+  const showPicker = inDevtools && !account && tab !== "figma";
 
   return (
     <div className="parity-bg parity-dashboard">
@@ -182,17 +183,26 @@ export default function App() {
           />
         </header>
 
-        <TabBar tabs={TABS} active={account || element ? null : tab} onChange={goTab} />
+        <TabBar tabs={TABS} active={account ? null : tab} onChange={pickTab} />
 
-        {/* Only while developing in a normal browser tab, where DevTools is not available */}
-        {import.meta.env.DEV && !inDevtools && !element && (
-          <button
-            type="button"
-            onClick={() => setElement(SAMPLE_ELEMENT)}
-            className="cursor-pointer text-[11px] font-bold text-[var(--p1)]"
-          >
-            Try element example
-          </button>
+        {/* Pick an element without leaving Parity */}
+        {showPicker && (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-[var(--muted)]">
+              {picking
+                ? "Click any element on the page. Esc cancels."
+                : pickError
+                  ? "Couldn't start the picker on this page."
+                  : "Pick an element on the page to score it."}
+            </p>
+            <PillButton
+              variant={picking ? "ghostOn" : "ghost"}
+              onClick={picking ? cancelPick : startPick}
+              className="flex-none"
+            >
+              {picking ? "Cancel" : "Pick element"}
+            </PillButton>
+          </div>
         )}
 
         {account ? (
@@ -204,7 +214,12 @@ export default function App() {
             onSignOut={signOut}
           />
         ) : element ? (
-          <ElementScore el={element} onBack={() => setElement(null)} />
+          <ElementScore
+            key={element.selector}
+            el={element}
+            tab={tab === "accessibility" ? "accessibility" : "design"}
+            onBack={() => setElement(null)}
+          />
         ) : tab === "figma" ? (
           <FigmaLink url={session.url} error={figmaError} onConnect={connect} onOpen={openFile} />
         ) : detail ? (

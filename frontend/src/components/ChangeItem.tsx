@@ -22,23 +22,23 @@ export default function ChangeItem({ change, part, subtitle, open, done, onPrevi
   const ink = luma(part.color) > 0.6 ? "#3A1F78" : "#fff";
   return (
     <li className="border-t border-[var(--line)]">
-      <div className="flex items-center gap-3 py-2">
+      <div className="flex items-center gap-2.5 py-1.5">
         <span
-          className="flex h-7 w-7 flex-none items-center justify-center rounded-lg"
+          className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
           style={{ background: part.color }}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
             <path d="M12 1 Q14 10 23 12 Q14 14 12 23 Q10 14 1 12 Q10 10 12 1Z" fill={ink} />
           </svg>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--ink)]">{change.title}</p>
-          <p className="text-[11px] text-[var(--muted)]">{subtitle}</p>
+          <p className="text-xs font-semibold text-[var(--ink)]">{change.title}</p>
+          <p className="text-[10px] text-[var(--muted)]">{subtitle}</p>
         </div>
         <PillButton variant={open ? "ghostOn" : "ghost"} aria-expanded={open} onClick={onPreview}>
           Preview
         </PillButton>
-        <PillButton variant={done ? "soft" : "primary"} onClick={onCommit} className="sm:min-w-[100px]">
+        <PillButton variant={done ? "soft" : "primary"} onClick={onCommit} className="sm:min-w-[84px]">
           {done ? "Committed ✓" : "Commit"}
         </PillButton>
       </div>

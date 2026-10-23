@@ -27,7 +27,7 @@ export default function ChangesList({ changes, parts, sub = "priority" }: Props)
 
   return (
     <section className="rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]">
-      <h3 className="mb-2 text-base font-semibold text-[var(--ink)]">Changes to Prioritize</h3>
+      <h3 className="mb-2 text-sm font-semibold text-[var(--ink)]">Changes to Prioritize</h3>
       {rows.length > 0 ? (
         <ul className="scroll max-h-40 overflow-y-auto pr-2">
           {rows.map(({ c, part }) => (

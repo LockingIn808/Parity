@@ -23,7 +23,7 @@ export default function PillButton({
     <button
       type={type}
       className={twMerge(
-        "cursor-pointer rounded-full px-3 py-1 text-sm font-semibold",
+        "cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-semibold",
         LOOK[variant],
         className
       )}
