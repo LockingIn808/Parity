@@ -127,3 +127,85 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
       {skipped.length > 0 && (
         <p className="mt-2 border-t border-[var(--line)] pt-2 text-[10px] text-[var(--muted)]">
           Not applicable to this element: {skipped.join(", ")}.
+        </p>
+      )}
+    </section>
+  );
+}
+
+interface Props {
+  el: ElementSnapshot;
+  tab: "design" | "accessibility";
+  onBack: () => void;
+}
+
+export default function ElementScore({ el, tab, onBack }: Props) {
+  const isDesign = tab === "design";
+  const result = isDesign
+    ? scoreDesign(el, specFor(el))
+    : scoreAccessibility(el);
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={onBack}
+        className="cursor-pointer text-xs font-semibold text-[var(--p1)]"
+      >
+        &#8249; Back
+      </button>
+
+      <section className={card}>
+        <div className="flex items-center gap-3">
+          <span className="rounded-lg bg-[var(--card-tint)] px-2 py-1 font-mono text-[11px] font-bold text-[var(--p1)]">
+            &lt;{el.tag}&gt;
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-bold">
+              {el.selector}
+            </p>
+            <p className="truncate text-[11px] text-[var(--muted)]">
+              {el.text || el.name || "No text"}
+            </p>
+          </div>
+
+          {isDesign && (
+            <span className="flex-none rounded-full bg-[#FFF1DC] px-2 py-[2px] text-[10px] font-bold text-[#8A5200]">
+              Sample Figma data
+            </span>
+          )}
+        </div>
+      </section>
+
+      <ScoreBreakdown
+        card={
+          isDesign
+            ? toCard("Design Comparison", result, "Similar")
+            : toCard("Accessibility Score", result, "Accessible")
+        }
+      />
+
+      {!isDesign && result.checked === 0 && (
+        <p className="px-1 text-[11px] text-[var(--muted)]">
+          This element has no text, image or control to check, so only
+          the page-level check ran. Select a button, link, image or
+          piece of text to see a real score.
+        </p>
+      )}
+
+      <Findings
+        key={tab}
+        parts={result.parts}
+        goalLabel={isDesign ? "FIGMA" : "GOAL"}
+      />
+
+      {isDesign && (
+        <p className="px-1 text-[11px] text-[var(--muted)]">
+          The design score compares against sample Figma values until
+          your Figma file data is connected.
+        </p>
+      )}
+    </div>
+  );
+}
