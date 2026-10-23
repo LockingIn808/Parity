@@ -639,7 +639,7 @@ app.post("/api/contrast", (req, res) => {
   }
 });
 
-app.use("/api/github", githubRoutes);
+app.use("/api/github", requireUser, githubRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
