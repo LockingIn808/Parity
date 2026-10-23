@@ -5,12 +5,13 @@ import { useSelectedElement } from "./hooks/useSelectedElement";
 import { parseFigma, loadFigmaFile } from "./lib/figma";
 import { initialsOf } from "./lib/github";
 import type { ElementSnapshot } from "./lib/inspect";
+import { signInWithGitHub, signOut as signOutAuth } from "./auth";
+import { getMe } from "./lib/api";
 import LandingPage from "./components/LandingPage";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ProfileMenu from "./components/ProfileMenu";
 import TabBar from "./components/TabBar";
 import GithubLogin from "./pages/GithubLogin";
-import GithubAuth from "./pages/GithubAuth";
 import Connecting from "./pages/Connecting";
 import FigmaLink from "./pages/FigmaLink";
 import DesignComparison from "./pages/DesignComparison";
@@ -76,18 +77,31 @@ export default function App() {
     goTab(t);
   };
 
-  const signIn = (user: string) => {
+  const signIn = async () => {
+    await signInWithGitHub();
+
+    const me = await getMe();
+    const user =
+      me.username ||
+      me.email ||
+      "GitHub user";
+
     setSession((s) => ({ ...s, user }));
-    setScreen("githubAuth");
+    setScreen("app");
+    goTab("figma");
   };
 
-  const signOut = () => {
-    setSession(EMPTY); // the theme is saved separately, so it survives sign out
-    setScreen("landing");
-    setTab("figma");
-    setDetail(null);
-    setAccount(false);
-    setElement(null);
+  const signOut = async () => {
+    try {
+      await signOutAuth();
+    } finally {
+      setSession(EMPTY);
+      setScreen("landing");
+      setTab("figma");
+      setDetail(null);
+      setAccount(false);
+      setElement(null);
+    }
   };
 
   const connect = async (url: string) => {
@@ -120,17 +134,10 @@ export default function App() {
 
   if (screen === "landing") return <LandingPage onGithub={() => setScreen("githubLogin")} />;
   if (screen === "githubLogin") {
-    return <GithubLogin onBack={() => setScreen("landing")} onSubmit={signIn} />;
-  }
-  if (screen === "githubAuth") {
     return (
-      <GithubAuth
-        user={session.user}
-        onAuthorize={() => {
-          setScreen("app");
-          goTab("figma");
-        }}
-        onCancel={() => setScreen("landing")}
+      <GithubLogin
+        onBack={() => setScreen("landing")}
+        onSubmit={signIn}
       />
     );
   }
