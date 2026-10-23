@@ -6,7 +6,6 @@ import { scoreAccessibility, scoreDesign, type PartResult, type ScoreResult } fr
 import { specFor } from "../lib/spec";
 
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
-const chip = "flex-none rounded-full px-2 py-[2px] text-[10px] font-bold";
 
 const luma = (hex: string) => {
   const n = parseInt(hex.slice(1), 16);
@@ -62,7 +61,8 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
       return n;
     });
 
-  const rows = [...parts].sort((a, b) => rank(a) - rank(b));
+  const rows = [...parts].filter((p) => rank(p) < 2).sort((a, b) => rank(a) - rank(b));
+  const skipped = parts.filter((p) => rank(p) === 2).map((p) => p.name);
   const failing = rows.filter((p) => rank(p) === 0).length;
 
   return (
@@ -72,7 +72,7 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
       </h3>
       <ul className="scroll max-h-60 overflow-y-auto pr-2">
         {rows.map((p) => {
-          const r = rank(p);
+          const fix = rank(p) === 0;
           const ink = luma(p.color) > 0.6 ? "#3A1F78" : "#fff";
           const isOpen = open === p.id;
           const isDone = done.has(p.id);
@@ -81,7 +81,7 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
               <div className="flex items-center gap-2.5 py-1.5">
                 <span
                   className="flex h-6 w-6 flex-none items-center justify-center rounded-md"
-                  style={{ background: p.color, opacity: r === 2 ? 0.45 : 1 }}
+                  style={{ background: p.color }}
                 >
                   <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
                     <path d="M12 1 Q14 10 23 12 Q14 14 12 23 Q10 14 1 12 Q10 10 12 1Z" fill={ink} />
@@ -89,34 +89,32 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-[var(--ink)]">{p.name}</p>
-                  <p className="truncate text-[10px] text-[var(--muted)]" title={r === 0 ? p.fix || p.note : p.note}>
-                    {r === 0 ? p.fix || p.note : p.note}
+                  <p className="truncate text-[10px] text-[var(--muted)]" title={fix ? p.fix || p.note : p.note}>
+                    {fix ? p.fix || p.note : p.note}
                   </p>
                 </div>
-                {r === 0 ? (
-                  <>
-                    <PillButton
-                      variant={isOpen ? "ghostOn" : "ghost"}
-                      aria-expanded={isOpen}
-                      onClick={() => setOpen(isOpen ? null : p.id)}
-                    >
-                      Preview
-                    </PillButton>
-                    <PillButton
-                      variant={isDone ? "soft" : "primary"}
-                      onClick={() => toggleDone(p.id)}
-                      className="sm:min-w-[84px]"
-                    >
-                      {isDone ? "Committed ✓" : "Commit"}
-                    </PillButton>
-                  </>
-                ) : r === 1 ? (
-                  <span className={`${chip} bg-[var(--badge-bg)] text-[var(--badge-text)]`}>Pass ✓</span>
+                <PillButton
+                  variant={isOpen ? "ghostOn" : "ghost"}
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : p.id)}
+                >
+                  Preview
+                </PillButton>
+                {fix ? (
+                  <PillButton
+                    variant={isDone ? "soft" : "primary"}
+                    onClick={() => toggleDone(p.id)}
+                    className="sm:min-w-[84px]"
+                  >
+                    {isDone ? "Committed ✓" : "Commit"}
+                  </PillButton>
                 ) : (
-                  <span className={`${chip} bg-[var(--card-soft)] text-[var(--muted)]`}>N/A</span>
+                  <span className="rounded-full bg-[var(--badge-bg)] px-2.5 py-0.5 text-center text-xs font-semibold text-[var(--badge-text)] sm:min-w-[84px]">
+                    Passing ✓
+                  </span>
                 )}
               </div>
-              {isOpen && r === 0 && (
+              {isOpen && (
                 <div className="flex gap-2 pb-2">
                   <Tile label={goalLabel} text={p.goal} />
                   <Tile label="YOUR SITE" text={p.site} site />
@@ -126,65 +124,6 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
           );
         })}
       </ul>
-    </section>
-  );
-}
-
-interface Props {
-  el: ElementSnapshot;
-  tab: "design" | "accessibility";
-  onBack: () => void;
-}
-
-export default function ElementScore({ el, tab, onBack }: Props) {
-  const isDesign = tab === "design";
-  const result = isDesign ? scoreDesign(el, specFor(el)) : scoreAccessibility(el);
-
-  return (
-    <div className="space-y-3">
-      <button type="button" onClick={onBack} className="cursor-pointer text-xs font-semibold text-[var(--p1)]">
-        &#8249; Back
-      </button>
-
-      <section className={card}>
-        <div className="flex items-center gap-3">
-          <span className="rounded-lg bg-[var(--card-tint)] px-2 py-1 font-mono text-[11px] font-bold text-[var(--p1)]">
-            &lt;{el.tag}&gt;
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-bold">{el.selector}</p>
-            <p className="truncate text-[11px] text-[var(--muted)]">{el.text || el.name || "No text"}</p>
-          </div>
-          {isDesign && (
-            <span className="flex-none rounded-full bg-[#FFF1DC] px-2 py-[2px] text-[10px] font-bold text-[#8A5200]">
-              Sample Figma data
-            </span>
-          )}
-        </div>
-      </section>
-
-      <ScoreBreakdown
-        card={
-          isDesign
-            ? toCard("Design Comparison", result, "Similar")
-            : toCard("Accessibility Score", result, "Accessible")
-        }
-      />
-
-      {!isDesign && result.checked === 0 && (
-        <p className="px-1 text-[11px] text-[var(--muted)]">
-          This element has no text, image or control to check, so only the page-level check ran. Select a button,
-          link, image or piece of text to see a real score.
-        </p>
-      )}
-
-      <Findings key={tab} parts={result.parts} goalLabel={isDesign ? "FIGMA" : "GOAL"} />
-
-      {isDesign && (
-        <p className="px-1 text-[11px] text-[var(--muted)]">
-          The design score compares against sample Figma values until your Figma file data is connected.
-        </p>
-      )}
-    </div>
-  );
-}
+      {skipped.length > 0 && (
+        <p className="mt-2 border-t border-[var(--line)] pt-2 text-[10px] text-[var(--muted)]">
+          Not applicable to this element: {skipped.join(", ")}.
