@@ -22,6 +22,7 @@ export interface Session {
   user: string;
   file: string;
   url: string;
+  projectId: number | null;
 }
 
 export interface User {

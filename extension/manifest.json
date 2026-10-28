@@ -25,6 +25,8 @@
   ],
   "host_permissions": [
     "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*"
+    "http://127.0.0.1:3000/*",
+    "https://jdfeyrjgsyxjwkspflcz.supabase.co/*",
+    "https://scaling-spoon-q7ppr6r4x65j394qr-3000.app.github.dev/*"
   ]
 }

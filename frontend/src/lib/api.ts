@@ -69,3 +69,49 @@ export async function apiRequest<T>(
 export function getMe(): Promise<ParityUser> {
   return apiRequest<ParityUser>("/me");
 }
+
+export interface FigmaFrame {
+  id: string;
+  name: string;
+  type: string;
+  page_id: string;
+  page_name: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface FigmaProject {
+  id: number;
+  file_key: string;
+  file_url: string;
+  file_name: string | null;
+  selected_frame_id: string | null;
+  selected_frame_name: string | null;
+  frames: FigmaFrame[];
+}
+
+export function connectFigmaProject(
+  fileUrl: string
+): Promise<FigmaProject> {
+  return apiRequest<FigmaProject>("/figma-projects", {
+    method: "POST",
+    body: JSON.stringify({
+      file_url: fileUrl,
+    }),
+  });
+}
+
+export function selectFigmaFrame(
+  projectId: number,
+  frameId: string
+): Promise<FigmaProject> {
+  return apiRequest<FigmaProject>(
+    `/figma-projects/${projectId}/frame`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        frame_id: frameId,
+      }),
+    }
+  );
+}

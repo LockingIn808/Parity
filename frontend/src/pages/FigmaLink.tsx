@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { parseFigma } from "../lib/figma";
 import { usePersistentState } from "../hooks/usePersistentState";
 import PillButton from "../components/PillButton";
+import type { FigmaFrame } from "../lib/api";
 
 interface Recent {
   name: string;
@@ -9,21 +10,23 @@ interface Recent {
 }
 
 interface Props {
-  url: string; // last link used, to prefill the box
-  error: boolean; // the last attempt was not a usable Figma link
+  url: string;
+  error: string | null;
+  frames: FigmaFrame[];
   onConnect: (url: string) => void;
   onOpen: (name: string) => void;
+  onSelectFrame: (frame: FigmaFrame) => void;
 }
 
 const EXAMPLE = "https://www.figma.com/design/Xk29aQ/Homepage-redesign?node-id=0-1";
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
-export default function FigmaLink({ url, error, onConnect, onOpen }: Props) {
+export default function FigmaLink({ url, error, frames, onConnect, onOpen, onSelectFrame }: Props) {
   const [value, setValue] = useState(url);
   const [dismissed, setDismissed] = useState(false);
   const [recents, setRecents] = usePersistentState<Recent[]>("parity-recents", []);
   const input = useRef<HTMLInputElement>(null);
-  const showError = error && !dismissed;
+  const showError = Boolean(error) && !dismissed;
 
   const submit = () => {
     setDismissed(false);
@@ -65,7 +68,7 @@ export default function FigmaLink({ url, error, onConnect, onOpen }: Props) {
 
         {showError ? (
           <p role="alert" className="mt-2 text-[11px] font-semibold text-[var(--err)]">
-            That doesn’t look like a Figma file link
+            {error}
           </p>
         ) : (
           <div className="mt-2 flex justify-between text-[11px] text-[var(--muted)]">
@@ -93,6 +96,43 @@ export default function FigmaLink({ url, error, onConnect, onOpen }: Props) {
           Connect Design
         </button>
       </section>
+
+      {frames.length > 0 && !showError && (
+        <section className={card}>
+          <h2 className="text-base font-semibold text-[var(--ink)]">
+            Select a Figma Frame
+          </h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Choose the screen or frame you want Parity to compare.
+          </p>
+
+          <ul className="scroll mt-2 max-h-44 overflow-y-auto pr-2">
+            {frames.map((frame) => (
+              <li
+                key={frame.id}
+                className="flex items-center justify-between gap-3 border-t border-[var(--line)] py-2 first:border-t-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-[var(--ink)]">
+                    {frame.name}
+                  </p>
+                  <p className="truncate text-[10px] text-[var(--muted)]">
+                    {frame.page_name} · {frame.type}
+                  </p>
+                </div>
+
+                <PillButton
+                  variant="ghost"
+                  onClick={() => onSelectFrame(frame)}
+                  className="shrink-0 text-xs"
+                >
+                  Select
+                </PillButton>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {showError ? (
         <section className={card}>

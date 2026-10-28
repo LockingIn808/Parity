@@ -2,11 +2,17 @@ import { useEffect, useState } from "react";
 import { TABS, type Screen, type Session, type TabId, type Theme } from "./global";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useSelectedElement } from "./hooks/useSelectedElement";
-import { parseFigma, loadFigmaFile } from "./lib/figma";
+import { parseFigma } from "./lib/figma";
 import { initialsOf } from "./lib/github";
 import type { ElementSnapshot } from "./lib/inspect";
 import { signInWithGitHub, signOut as signOutAuth } from "./auth";
-import { getMe } from "./lib/api";
+import {
+  connectFigmaProject,
+  getMe,
+  selectFigmaFrame,
+  type FigmaFrame,
+  type FigmaProject,
+} from "./lib/api";
 import LandingPage from "./components/LandingPage";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ProfileMenu from "./components/ProfileMenu";
@@ -21,7 +27,7 @@ import ElementScore from "./pages/ElementScore";
 import Account from "./pages/Account";
 import mark from "./assets/mark.png";
 
-const EMPTY: Session = { user: "", file: "", url: "" };
+const EMPTY: Session = { user: "", file: "", url: "", projectId: null };
 
 export default function App() {
   const [session, setSession, ready] = usePersistentState<Session>("parity-session", EMPTY);
@@ -31,8 +37,9 @@ export default function App() {
   const [detail, setDetail] = useState<string | null>(null); // a Part id, e.g. "fonts"
   const [account, setAccount] = useState(false); // true = the Settings page is showing
   const [element, setElement] = useState<ElementSnapshot | null>(null); // selected on the website
-  const [figmaError, setFigmaError] = useState(false);
+  const [figmaError, setFigmaError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false); // Figma data finished loading
+  const [pendingProject, setPendingProject] = useState<FigmaProject | null>(null);
   const [booted, setBooted] = useState(false);
 
   // An element was selected with the inspect tool: show its scores on the Design or Accessibility tab.
@@ -64,7 +71,7 @@ export default function App() {
     setDetail(null);
     setAccount(false);
     setElement(null);
-    setFigmaError(false);
+    setFigmaError(null);
   };
 
   // With an element selected, Design/Accessibility switch views but keep the element.
@@ -105,23 +112,86 @@ export default function App() {
   };
 
   const connect = async (url: string) => {
-    const ref = parseFigma(url);
-    setSession((s) => ({ ...s, url }));
+    const cleanUrl = url.trim();
+    const ref = parseFigma(cleanUrl);
+
+    setSession((s) => ({ ...s, url: cleanUrl }));
+
     if (!ref) {
-      setFigmaError(true);
+      setFigmaError("That doesn’t look like a valid Figma file link.");
       return;
     }
-    setFigmaError(false);
-    setSession((s) => ({ ...s, url, file: ref.name }));
+
+    setFigmaError(null);
+    setPendingProject(null);
     setLoaded(false);
     setScreen("connecting");
+
     try {
-      await loadFigmaFile(ref.key);
+      const project = await connectFigmaProject(cleanUrl);
+
+      if (!project.selected_frame_id) {
+        if (!project.frames?.length) {
+          throw new Error(
+            "Parity connected to the Figma file, but no top-level frames were found."
+          );
+        }
+
+        setPendingProject(project);
+        setScreen("app");
+        setTab("figma");
+        return;
+      }
+
+      setSession((s) => ({
+        ...s,
+        url: cleanUrl,
+        file: project.file_name || ref.name,
+        projectId: project.id,
+      }));
+
       setLoaded(true);
-    } catch {
+    } catch (error) {
       setScreen("app");
       setTab("figma");
-      setFigmaError(true);
+      setFigmaError(
+        error instanceof Error
+          ? error.message
+          : "Could not connect to the Figma file."
+      );
+    }
+  };
+
+  const chooseFrame = async (frame: FigmaFrame) => {
+    if (!pendingProject) return;
+
+    setFigmaError(null);
+    setLoaded(false);
+    setScreen("connecting");
+
+    try {
+      const project = await selectFigmaFrame(
+        pendingProject.id,
+        frame.id
+      );
+
+      setSession((s) => ({
+        ...s,
+        file: project.file_name || s.file || "Figma design",
+        url: project.file_url,
+        projectId: project.id,
+      }));
+
+      setPendingProject(null);
+      setLoaded(true);
+    } catch (error) {
+      setScreen("app");
+      setTab("figma");
+      setFigmaError(
+        error instanceof Error
+          ? error.message
+          : "Could not select that Figma frame."
+      );
     }
   };
 
@@ -209,7 +279,14 @@ export default function App() {
             onBack={() => setElement(null)}
           />
         ) : tab === "figma" ? (
-          <FigmaLink url={session.url} error={figmaError} onConnect={connect} onOpen={openFile} />
+          <FigmaLink
+            url={session.url}
+            error={figmaError}
+            frames={pendingProject?.frames ?? []}
+            onConnect={connect}
+            onOpen={openFile}
+            onSelectFrame={chooseFrame}
+          />
         ) : detail ? (
           <ComponentDetail report={tab} partId={detail} onBack={() => setDetail(null)} />
         ) : tab === "design" ? (
