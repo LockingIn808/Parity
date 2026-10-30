@@ -74,3 +74,50 @@ test("four-side padding passes the commit validator", () => {
   const fixes = commitFixesFromCss(".cta", { padding: "8px 16px 8px 16px" });
   assert.equal(fixes[0].value, "8px 16px 8px 16px");
 });
+
+// A typical Figma button: FRAME (fill, padding, radius) > TEXT (font, colour).
+const buttonFrame = { id: "5:1", parent_id: "0:1", name: "Button", type: "FRAME", visible: true, width: 120, height: 40, background: "#5A32C6", padding: 12, padding_top: 12, padding_right: 24, padding_bottom: 12, padding_left: 24, corner_radius: 8 };
+const buttonText = { id: "5:2", parent_id: "5:1", name: "Label", type: "TEXT", text: "Buy now", visible: true, width: 72, height: 16, font_family: "Inter", font_size: 14, font_weight: 600, color: "#FFFFFF" };
+const domButton = { tag: "button", selector: "button.buy", text: "Buy now", fontFamily: "Inter", fontSize: 14, fontWeight: 600, color: "#FFFFFF", background: "#5A32C6", width: 120, height: 40, padding: 18, paddingTop: 12, paddingRight: 24, paddingBottom: 12, paddingLeft: 24, gap: 0, borderRadius: 8 };
+
+test("auto-match on the button text lifts to the button frame and compares everything", () => {
+  const result = compareElement({ element: domButton, nodes: [buttonFrame, buttonText] });
+  assert.equal(result.matched_node.id, "5:1");
+  assert.equal(result.text_node.id, "5:2");
+  assert.ok(result.categories.every((c) => c.fraction !== null), "all four categories comparable");
+  assert.equal(result.design_score, 100);
+});
+
+test("picking the frame by hand pulls typography from its single text layer", () => {
+  const result = compareElement({ element: { ...domButton, fontSize: 12 }, nodes: [buttonFrame, buttonText], figmaNodeId: "5:1" });
+  assert.equal(result.css_fixes["font-size"], "14px");
+});
+
+test("a plain text element sized like its text stays matched to the text layer", () => {
+  const span = { tag: "span", selector: "span", text: "Buy now", fontFamily: "Inter", fontSize: 14, fontWeight: 600, color: "#FFFFFF", background: "#5A32C6", width: 72, height: 16, padding: 0, gap: 0 };
+  const result = compareElement({ element: span, nodes: [buttonFrame, buttonText] });
+  assert.equal(result.matched_node.id, "5:2");
+  assert.equal(result.text_node, null);
+});
+
+const { askGemini } = require("../src/ai/ask");
+
+test("askGemini sends context as data and returns plain text, skipping thoughts", async () => {
+  const saved = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "test-key";
+  try {
+    const answer = await askGemini({ selector: "h1" }, "Why?", async (url, options) => {
+      assert.match(url, /gemini-3\.5-flash-lite:generateContent/);
+      assert.equal(options.headers["x-goog-api-key"], "test-key");
+      assert.match(JSON.parse(options.body).contents[0].parts[0].text, /"selector":"h1"/);
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ thought: true, text: "hidden" }, { text: " Font is 2px small. " }] } }] }) };
+    });
+    assert.equal(answer, "Font is 2px small.");
+    await assert.rejects(askGemini({}, "q", async () => ({ ok: false, status: 429 })), /rate limit/);
+    delete process.env.GEMINI_API_KEY;
+    await assert.rejects(askGemini({}, "q"), (e) => e.status === 503);
+  } finally {
+    if (saved === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = saved;
+  }
+});

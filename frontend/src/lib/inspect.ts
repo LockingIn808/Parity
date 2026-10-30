@@ -29,6 +29,7 @@ export interface ElementSnapshot {
   gap: number;
   borderRadius: number; // top-left corner, px
   parityId: string; // handle Parity uses to find this element again (live preview, refresh)
+  invisible?: boolean; // set (with only `tag`) for <style>, <script>, hidden elements...
 }
 
 /**
@@ -37,8 +38,12 @@ export interface ElementSnapshot {
  * The element is remembered in window.__parity.els under a short id (no DOM attributes are added)
  * so live previews and refreshes can find the same element after the DevTools selection moves.
  */
-const COLLECT_FN = `(function (el) {
+export const COLLECT_FN = `(function (el) {
   if (!el || el.nodeType !== 1 || el === document.documentElement || el === document.body) return null;
+  var tagUpper = String(el.tagName).toUpperCase();
+  var hiddenTags = ['STYLE', 'SCRIPT', 'HEAD', 'META', 'LINK', 'TITLE', 'NOSCRIPT', 'TEMPLATE', 'BASE', 'BR', 'WBR'];
+  var box0 = el.getBoundingClientRect();
+  if (hiddenTags.indexOf(tagUpper) > -1 || (!box0.width && !box0.height)) return { invisible: true, tag: tagUpper.toLowerCase() };
   var store = window.__parity || (window.__parity = { els: {}, orig: {}, n: 0 });
   var parityId = '';
   for (var key in store.els) { if (store.els[key] === el) { parityId = key; break; } }

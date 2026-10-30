@@ -151,6 +151,7 @@ export interface SuggestedFix {
 export interface CompareResult {
   project: { id: number; file_name: string | null; frame_id: string; frame_name: string | null };
   matched_node: { id: string; name: string; type: string; text: string | null; match_score: number | null };
+  text_node?: { id: string; name: string } | null; // text layer whose font was used, when combined with a frame
   design_score: number;
   categories: ComparePart[];
   suggested_fixes: SuggestedFix[];
@@ -172,5 +173,13 @@ export function compareElement(
       element,
       figma_node_id: figmaNodeId,
     }),
+  });
+}
+
+/** Asks Parity's AI about the results currently on screen (context is plain data). */
+export function askParity(context: object, question: string): Promise<{ answer: string }> {
+  return apiRequest<{ answer: string }>("/ai/ask", {
+    method: "POST",
+    body: JSON.stringify({ context, question }),
   });
 }

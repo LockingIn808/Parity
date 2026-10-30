@@ -59,3 +59,15 @@ Kept but no longer used by the UI: `lib/spec.ts`, `lib/figma.ts#loadFigmaFile`, 
 - Frontend: all changed files type-check under `strict` + `noUnusedLocals` against stand-in type declarations.
 - In-page scripts (collect, re-collect, apply, revert, removed element) run against a simulated DOM element.
 - **Not yet verified:** `npm install`/`npm run build` with real packages, real Figma/Supabase calls, and the panel inside Chrome. Use the checklist in `SETUP.md` §5.
+
+## Update 2
+
+- **Pick element** button inside the panel (outline on hover, click to compare, Esc to cancel); the page never receives that click.
+- `<style>`, `<script>`, `<head>` and zero-size elements are ignored with a clear notice instead of a meaningless score.
+- Duplicate "how to select" instructions removed; "Compared this session" rows reopen their result (re-read from the page).
+- **Smarter matching:** a frame with one text layer inside (buttons, chips, cards) is compared as one element, so fonts *and*
+  box styles are comparable. `compare/element` now also returns `text_node`.
+- **AI back, on demand:** `POST /ai/ask {question, context}` → `{answer}` (Gemini, 20 requests/min/user). The panel has
+  **Explain these results**, a **Why?** button on each fix, and an **Ask Parity** box on the Design and Accessibility results.
+  Comparisons no longer wait on AI. `/health` reports `ai_configured`.
+- Tests: 19 backend tests pass (new: button frame+text matching, AI request/response handling).

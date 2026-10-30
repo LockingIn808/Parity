@@ -4,6 +4,8 @@ import ScoreBreakdown, { type CardData } from "../components/ScoreBreakdown";
 import type { ElementSnapshot } from "../lib/inspect";
 import { scoreAccessibility, type PartResult, type ScoreResult } from "../lib/score";
 import DesignResult from "../components/DesignResult";
+import AskBox from "../components/AskBox";
+import { useAsk } from "../hooks/useAsk";
 
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
@@ -146,6 +148,21 @@ export default function ElementScore({ el, tab, projectId, onGoFigma, onBack, on
   const isDesign = tab === "design";
   const result = isDesign ? null : scoreAccessibility(el);
 
+  const ai = useAsk(() => ({
+    kind: "accessibility check (computed locally from the element's styles and attributes)",
+    element: { tag: el.tag, selector: el.selector, role: el.role, accessible_name: el.name, text: el.text },
+    accessibility_score_percent: result?.total ?? null,
+    checks: (result?.parts ?? []).map((p) => ({
+      name: p.name,
+      applies: p.fraction !== null,
+      pass_percent: p.fraction === null ? null : Math.round(p.fraction * 100),
+      note: p.note,
+      suggested_fix: p.fix || null,
+      site_now: p.site,
+      goal: p.goal,
+    })),
+  }));
+
   return (
     <div className="space-y-3">
       <button
@@ -193,6 +210,13 @@ export default function ElementScore({ el, tab, projectId, onGoFigma, onBack, on
               </p>
             )}
             <Findings key={tab} parts={result.parts} goalLabel="GOAL" />
+            <AskBox
+              items={ai.items}
+              busy={ai.busy}
+              onAsk={(q) => void ai.ask(q)}
+              explainQuestion="Explain these accessibility results in plain words: what is wrong, who it affects, and what to fix first?"
+              placeholder="Ask about accessibility issues…"
+            />
           </>
         )
       )}

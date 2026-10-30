@@ -1,8 +1,10 @@
 import PillButton from "../components/PillButton";
+import type { ElementSnapshot } from "../lib/inspect";
 
 export interface ComparedElement {
   selector: string;
   score: number;
+  snap: ElementSnapshot;
 }
 
 interface Props {
@@ -11,13 +13,14 @@ interface Props {
   connected: boolean;
   inDevtools: boolean;
   recent: ComparedElement[];
+  onOpen: (snap: ElementSnapshot) => void;
   onGoFigma: () => void;
 }
 
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
 /** Design tab before an element is picked: what is connected and what to do next. */
-export default function DesignComparison({ file, frame, connected, inDevtools, recent, onGoFigma }: Props) {
+export default function DesignComparison({ file, frame, connected, inDevtools, recent, onOpen, onGoFigma }: Props) {
   if (!connected) {
     return (
       <section className={card}>
@@ -40,7 +43,7 @@ export default function DesignComparison({ file, frame, connected, inDevtools, r
         <p className="truncate text-[11px] text-[var(--muted)]">{file}</p>
         <p className="mt-3 text-xs text-[var(--ink2)]">
           {inDevtools
-            ? "Pick an element with Chrome’s inspect tool (the arrow at the top left of DevTools) or click one in the Elements panel."
+            ? "Click ⌖ Pick element above, then click any part of the page to compare it with this frame."
             : "Open this panel inside Chrome DevTools to inspect elements on a page."}
         </p>
       </section>
@@ -50,12 +53,16 @@ export default function DesignComparison({ file, frame, connected, inDevtools, r
           <h3 className="mb-1 text-sm font-semibold text-[var(--ink)]">Compared this session</h3>
           <ul>
             {recent.map((r) => (
-              <li
-                key={r.selector}
-                className="flex items-center justify-between border-t border-[var(--line)] py-1.5 text-xs first:border-t-0"
-              >
-                <span className="truncate font-mono text-[11px]">{r.selector}</span>
-                <span className="ml-2 font-semibold text-[var(--p1)]">{r.score}%</span>
+              <li key={r.snap.parityId} className="border-t border-[var(--line)] first:border-t-0">
+                <button
+                  type="button"
+                  onClick={() => onOpen(r.snap)}
+                  title="Open this result again"
+                  className="flex w-full cursor-pointer items-center justify-between py-1.5 text-left text-xs hover:text-[var(--p1)]"
+                >
+                  <span className="truncate font-mono text-[11px]">{r.selector}</span>
+                  <span className="ml-2 font-semibold text-[var(--p1)]">{r.score}% ›</span>
+                </button>
               </li>
             ))}
           </ul>

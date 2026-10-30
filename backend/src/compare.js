@@ -604,6 +604,65 @@ function getMismatches(score) {
     }));
 }
 
+const CONTAINER_TYPES = new Set(["FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE", "GROUP", "SECTION"]);
+const TYPOGRAPHY = ["font_family", "font_size", "font_weight", "line_height", "letter_spacing", "color"];
+const BOX = ["width", "height", "background", "padding", "padding_top", "padding_right", "padding_bottom", "padding_left", "gap", "corner_radius"];
+
+function sizeGap(element, node) {
+  if (!isNum(element.width) || !isNum(element.height) || !isNum(node?.width) || !isNum(node?.height)) {
+    return Infinity;
+  }
+  return Math.abs(element.width - node.width) + Math.abs(element.height - node.height);
+}
+
+function textDescendants(node, nodes) {
+  const found = [];
+  const visit = (id) => {
+    for (const child of nodes) {
+      if (child.parent_id !== id || child.visible === false) continue;
+      if (child.type === "TEXT") found.push(child);
+      else visit(child.id);
+    }
+  };
+  visit(node.id);
+  return found;
+}
+
+/**
+ * In Figma a button or card is a container (size, fill, padding, radius) with a text layer
+ * inside (font, text colour). On the web both live on one element. Combine them so every
+ * category can be compared, instead of half of them reading "not comparable".
+ * Returns { box, text } where either may be null.
+ */
+function combineLayers(element, matched, nodes) {
+  if (matched.type === "TEXT") {
+    const parent = nodes.find((node) => node.id === matched.parent_id);
+    const parentHasOnlyThisText =
+      parent && CONTAINER_TYPES.has(parent.type) && textDescendants(parent, nodes).length === 1;
+    // Lift to the parent box only when the inspected element is sized like the box, not like the text.
+    if (parentHasOnlyThisText && sizeGap(element, parent) < sizeGap(element, matched)) {
+      return { box: parent, text: matched };
+    }
+    return { box: null, text: matched };
+  }
+
+  if (CONTAINER_TYPES.has(matched.type)) {
+    const texts = textDescendants(matched, nodes);
+    return { box: matched, text: texts.length === 1 ? texts[0] : null };
+  }
+
+  return { box: matched, text: null };
+}
+
+function mergedNode({ box, text }) {
+  if (!box) return text;
+  if (!text) return box;
+  const merged = { ...box };
+  for (const key of TYPOGRAPHY) merged[key] = text[key] ?? box[key];
+  for (const key of BOX) merged[key] = box[key];
+  return merged;
+}
+
 function compareElement({
   element,
   nodes,
@@ -631,8 +690,11 @@ function compareElement({
     );
   }
 
+  const layers = combineLayers(element, matchedNode, nodes);
+  const primary = layers.box || layers.text;
+
   const designSpec = designSpecFromNode(
-    matchedNode
+    mergedNode(layers)
   );
 
   const designScore = scoreDesign(
@@ -645,14 +707,20 @@ function compareElement({
     );
 
   return {
+    // The layer that stands for the whole element (pinned by the panel for refreshes),
+    // plus the text layer whose typography was used, when one was combined in.
     matched_node: {
-      id: matchedNode.id,
-      name: matchedNode.name,
-      type: matchedNode.type,
-      text: matchedNode.text,
+      id: primary.id,
+      name: primary.name,
+      type: primary.type,
+      text: layers.text?.text ?? primary.text ?? null,
       match_score:
         matchedNode.match_score ?? null,
     },
+    text_node:
+      layers.box && layers.text
+        ? { id: layers.text.id, name: layers.text.name }
+        : null,
     design_spec: designSpec,
     design_score: designScore.total,
     categories: designScore.parts,

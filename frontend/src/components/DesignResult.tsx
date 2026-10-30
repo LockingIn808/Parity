@@ -12,6 +12,8 @@ import { collectById, type ElementSnapshot } from "../lib/inspect";
 import { evalInPage, inDevtools } from "../lib/devtools";
 import { applyStyles, revertStyles } from "../lib/preview";
 import { copyText } from "../lib/clipboard";
+import { useAsk } from "../hooks/useAsk";
+import AskBox from "./AskBox";
 
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 const COLORS: Record<string, string> = {
@@ -116,6 +118,33 @@ export default function DesignResult({ projectId, element, onScored }: Props) {
   scored.current = onScored;
 
   const canPreview = inDevtools() && snapshot.parityId !== "sample";
+
+  // Everything the AI may use: exactly what this panel shows, nothing else.
+  const ai = useAsk(() => {
+    if (!result) return { kind: "design", status: "no comparison yet" };
+    const pendingNow = result.suggested_fixes.filter((f) => !applied[f.css_property]);
+    return {
+      kind: "design comparison against Figma",
+      element: { tag: snapshot.tag, selector: snapshot.selector, text: snapshot.text },
+      figma: {
+        file: result.project.file_name,
+        frame: result.project.frame_name,
+        layer: `${result.matched_node.name} (${result.matched_node.type})`,
+        text_layer: result.text_node?.name ?? null,
+        matched_by: manual ? "user" : "automatic matching",
+      },
+      fidelity_score_percent: result.design_score,
+      categories: result.categories.map((c) => ({
+        name: c.name,
+        comparable: c.fraction !== null,
+        match_percent: c.fraction === null ? null : Math.round(c.fraction * 100),
+        current: c.current,
+        figma: c.expected,
+      })),
+      differences_still_open: pendingNow.map((f) => ({ property: f.css_property, current: f.current, figma: f.expected })),
+      previewing_on_page: Object.values(applied).map((f) => ({ property: f.css_property, figma_value: f.expected })),
+    };
+  });
 
   const compare = useCallback(
     async (snap: ElementSnapshot, pinned: string | null) => {
@@ -245,7 +274,9 @@ export default function DesignResult({ projectId, element, onScored }: Props) {
             <p className="truncate text-xs font-semibold text-[var(--ink)]">
               {result.matched_node.name || result.matched_node.id}{" "}
               <span className="font-normal text-[var(--muted)]">
-                · {result.matched_node.type} in {result.project.frame_name ?? "selected frame"}
+                · {result.matched_node.type}
+                {result.text_node ? ` + text “${result.text_node.name}”` : ""} in{" "}
+                {result.project.frame_name ?? "selected frame"}
               </span>
             </p>
           </div>
@@ -377,6 +408,19 @@ export default function DesignResult({ projectId, element, onScored }: Props) {
                       {f.expected}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    disabled={ai.busy}
+                    title="Ask the AI about this change"
+                    onClick={() =>
+                      void ai.ask(
+                        `Explain the ${LABELS[f.property] ?? f.css_property} change from ${f.current} to ${f.expected}: what will look different, and is it safe to apply?`
+                      )
+                    }
+                    className="flex-none cursor-pointer px-1 text-[11px] font-bold text-[var(--p1)] disabled:opacity-50"
+                  >
+                    Why?
+                  </button>
                   {on ? (
                     <PillButton variant="ghost" disabled={busy} onClick={() => void revert([f.css_property])}>
                       Revert
@@ -419,6 +463,14 @@ export default function DesignResult({ projectId, element, onScored }: Props) {
           arbitrary values. The selector is a best guess; check it targets the right element.
         </p>
       </section>
+
+      <AskBox
+        items={ai.items}
+        busy={ai.busy}
+        onAsk={(q) => void ai.ask(q)}
+        explainQuestion="Explain these results in plain words: what differs from the Figma design, and which fix should I apply first?"
+        placeholder="Ask about this element's design…"
+      />
 
       <PillButton variant="ghost" className="w-full" disabled={busy || loading} onClick={() => void guarded(() => refresh())}>
         {loading ? "Comparing…" : "Re-compare"}

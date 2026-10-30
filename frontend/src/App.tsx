@@ -4,7 +4,8 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import { useSelectedElement } from "./hooks/useSelectedElement";
 import { parseFigma } from "./lib/figma";
 import { initialsOf } from "./lib/github";
-import type { ElementSnapshot } from "./lib/inspect";
+import { collectById, type ElementSnapshot } from "./lib/inspect";
+import { evalInPage } from "./lib/devtools";
 import { signInWithGitHub, signOut as signOutAuth } from "./auth";
 import { supabaseConfigError } from "./supabase";
 import {
@@ -20,6 +21,7 @@ import LandingPage from "./components/LandingPage";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ProfileMenu from "./components/ProfileMenu";
 import TabBar from "./components/TabBar";
+import PickBar from "./components/PickBar";
 import GithubLogin from "./pages/GithubLogin";
 import Connecting from "./pages/Connecting";
 import FigmaLink from "./pages/FigmaLink";
@@ -50,15 +52,34 @@ export default function App() {
   const [project, setProject] = useState<FigmaProject | null>(null);
   const [compared, setCompared] = useState<ComparedElement[]>([]);
   const [booted, setBooted] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // An element was selected with the inspect tool: show its scores on the Design or Accessibility tab.
-  const inDevtools = useSelectedElement((snap) => {
-    if (screen !== "app") return;
+  // An element was picked (Pick element button, inspect arrow or Elements panel).
+  const showElement = (snap: ElementSnapshot) => {
+    if (snap.invisible) {
+      setNotice(`<${snap.tag}> isn’t visible on the page, so there is nothing to compare. Pick something you can see.`);
+      return;
+    }
+    setNotice(null);
     setElement(snap);
     setPickCount((n) => n + 1);
     setAccount(false);
     setDetail(null);
     setTab((t) => (t === "figma" ? "design" : t));
+  };
+
+  // Reopen from "Compared this session": re-read it, since previews may have changed it.
+  const reopen = (snap: ElementSnapshot) => {
+    evalInPage<ElementSnapshot | null>(collectById(snap.parityId))
+      .then((fresh) => {
+        if (fresh) showElement(fresh);
+        else setNotice("That element is no longer on the page (the page may have reloaded). Pick it again.");
+      })
+      .catch(() => showElement(snap));
+  };
+
+  const inDevtools = useSelectedElement((snap) => {
+    if (screen === "app") showElement(snap);
   });
 
   // Apply the theme to <html> so index.css can switch its colors.
@@ -83,6 +104,7 @@ export default function App() {
   }, [ready, booted, session]);
 
   const goTab = (t: TabId) => {
+    setNotice(null);
     setTab(t);
     setDetail(null);
     setAccount(false);
@@ -191,8 +213,10 @@ export default function App() {
     );
   };
 
-  const recordScore = (selector: string, score: number) =>
-    setCompared((list) => [{ selector, score }, ...list.filter((x) => x.selector !== selector)].slice(0, 8));
+  const recordScore = (snap: ElementSnapshot, score: number) =>
+    setCompared((list) =>
+      [{ selector: snap.selector, score, snap }, ...list.filter((x) => x.snap.parityId !== snap.parityId)].slice(0, 8)
+    );
 
   if (!ready || !themeReady) return null; // wait for saved state so nothing flashes
 
@@ -262,11 +286,11 @@ export default function App() {
 
         <TabBar tabs={TABS} active={account ? null : tab} onChange={pickTab} />
 
-        {/* Tells you how to select an element. Hidden once one is selected. */}
-        {inDevtools && !account && !element && tab !== "figma" && (
-          <p className="px-1 text-[11px] text-[var(--muted)]">
-            Select an element on the page with Chrome’s inspect tool (the arrow icon at the top left of DevTools),
-            then come back to this tab to see its scores.
+        {inDevtools && !account && tab !== "figma" && <PickBar onPicked={showElement} />}
+
+        {notice && !account && tab !== "figma" && (
+          <p role="status" className="rounded-xl bg-[#FFF1DC] px-3 py-2 text-[11px] font-semibold text-[#8A5200]">
+            {notice}
           </p>
         )}
 
@@ -286,7 +310,7 @@ export default function App() {
             projectId={session.projectId}
             onGoFigma={() => goTab("figma")}
             onBack={() => setElement(null)}
-            onScored={(score) => recordScore(element.selector, score)}
+            onScored={(score) => recordScore(element, score)}
           />
         ) : tab === "figma" ? (
           <FigmaLink
@@ -306,6 +330,7 @@ export default function App() {
             connected={Boolean(session.projectId)}
             inDevtools={inDevtools}
             recent={compared}
+            onOpen={reopen}
             onGoFigma={() => goTab("figma")}
           />
         ) : (

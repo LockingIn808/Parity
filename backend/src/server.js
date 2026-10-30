@@ -20,9 +20,9 @@ const {
   validateCompareBody,
 } = require("./validation");
 
-// AI explanations (./ai/explainResults, Gemini) are intentionally no longer called from
-// the comparison route: the panel's AI area was replaced by Figma connection history.
-// The module and its test are kept so the work is not lost.
+// AI: the comparison route no longer waits on Gemini (./ai/explainResults is kept).
+// Instead the panel asks on demand through POST /ai/ask (Explain button and Ask box).
+const { askGemini } = require("./ai/ask");
 const githubRoutes = require("./changes/routes");
 const { contrast } = require("./changes/contrast");
 const {
@@ -180,6 +180,7 @@ app.get("/health", (req, res) => {
     service: "parity-backend",
     supabase_configured: Boolean(supabase),
     figma_configured: Boolean(process.env.FIGMA_ACCESS_TOKEN),
+    ai_configured: Boolean(process.env.GEMINI_API_KEY),
   });
 });
 
@@ -721,6 +722,40 @@ app.delete("/figma-projects/:id", requireUser, async (req, res) => {
   }
 
   res.status(204).end();
+});
+
+// Small per-user limit so a stuck button can't burn through the Gemini quota.
+const askLog = new Map();
+function allowAsk(userId) {
+  const now = Date.now();
+  const recent = (askLog.get(userId) || []).filter((t) => now - t < 60000);
+  if (recent.length >= 20) return false;
+  recent.push(now);
+  askLog.set(userId, recent);
+  return true;
+}
+
+app.post("/ai/ask", requireUser, async (req, res) => {
+  const { question, context } = req.body || {};
+
+  if (typeof question !== "string" || !question.trim() || question.length > 500) {
+    return res.status(400).json({ error: "Ask a question of up to 500 characters." });
+  }
+
+  if (!context || typeof context !== "object" || JSON.stringify(context).length > 20000) {
+    return res.status(400).json({ error: "Missing or oversized comparison context." });
+  }
+
+  if (!allowAsk(req.user.id)) {
+    return res.status(429).json({ error: "That's a lot of questions in a minute. Wait a moment and try again." });
+  }
+
+  try {
+    const answer = await askGemini(context, question.trim());
+    res.json({ answer });
+  } catch (error) {
+    res.status(error.status || 502).json({ error: error.message });
+  }
 });
 
 app.post("/api/contrast", (req, res) => {

@@ -19,7 +19,8 @@ Copy `backend/.env.example` to `backend/.env` and fill in:
 | `PORT` | No | Defaults to `3000` | No |
 | `CORS_ORIGINS` | No | Leave blank. Extension and localhost origins are always allowed | No |
 
-`GEMINI_API_KEY` is no longer used (the AI area was replaced by Figma history).
+| `GEMINI_API_KEY` | No | Google AI Studio → aistudio.google.com/apikey. Powers **Explain**, **Why?** and the **Ask Parity** box. Without it everything else still works | **Yes** |
+| `GEMINI_MODEL` | No | Defaults to `gemini-3.5-flash-lite` | No |
 
 ### `frontend/.env` (public, baked into the extension at build time)
 
@@ -106,16 +107,18 @@ Use a page you control (for example a local Vite app) plus a Figma file the toke
    - URL with `?node-id=` of a top-level frame: goes straight to the Design tab.
    - Otherwise: the **Select a Figma Frame** list appears → pick one.
 4. **Recent Figma files** now lists the file with its frame and "just now".
-5. In DevTools' Elements panel, click an element (or use the arrow picker). Parity switches to the Design tab:
+5. Click **⌖ Pick element** in the Parity tab, hover the page (elements get outlined) and click one. Chrome's inspect arrow
+   or the Elements panel also work. Parity shows on the Design tab:
    - Design Fidelity score and pie chart
    - "Compared with Figma layer …" → **Change** lets you pick the exact layer by hand
    - By category: Current vs Figma for Fonts / Color / Spacing / Sizing
 6. **Apply** a fix → the page changes immediately, the row shows PREVIEWING, and the score goes up.
    **Revert** puts the original back. **Apply all** / **Revert all** work too. Reloading the page clears all previews.
 7. **Code** → CSS and Tailwind for the fixes → **Copy**. "All Figma values" shows the full target style.
-8. Accessibility tab with the same element → local accessibility score.
-9. Go back to Figma Link → click **Open** on an older history entry → it reconnects without re-entering the URL.
-10. Close DevTools and reopen it → you are still signed in and the last project is restored.
+8. **✦ Ask Parity**: click **Explain these results**, click **Why?** on a fix, or type a question. Answers need `GEMINI_API_KEY`.
+9. Accessibility tab with the same element → local accessibility score and its own Ask box.
+10. Go back to Figma Link → click **Open** on an older history entry → it reconnects without re-entering the URL.
+11. Close DevTools and reopen it → you are still signed in and the last project is restored.
 
 ## 6. If something fails
 
@@ -133,6 +136,8 @@ Use a page you control (for example a local Vite app) plus a Figma file the toke
 ## 7. Known limits (honest list)
 
 - Matching starts automatic (text, size, font, colour); use **Change** to pick the layer by hand when it guesses wrong.
+  A Figma frame with a single text layer inside (a typical button) is compared as one element: box styles from the frame,
+  typography from the text.
 - Compared today: font family, size, weight (shown as a fix but, per the existing team test, not counted in the score),
   text colour, background, padding (per side), gap, width, height, border radius. Not yet: line-height,
   letter-spacing, borders, margins.
