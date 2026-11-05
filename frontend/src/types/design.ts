@@ -14,6 +14,25 @@ export interface Change {
   title: string;
   priority: Priority;
   partId: string; // which Part this change belongs to
+  live?: ChangeLive; // real data + actions; without it the row behaves like the original sample
+}
+
+/** What a real change row can do. Everything optional so rows degrade to the original behaviour. */
+export interface LiveActions {
+  committed?: boolean; // saved to GitHub: Commit shows as Revert
+  busy?: boolean;
+  preview?: (on: boolean) => void; // show/hide the change on the page while Preview is open
+  commit?: () => void;
+  revert?: () => void;
+  why?: () => void; // ask the AI about this change
+  css?: string; // for Copy CSS
+  tailwind?: string; // for Copy Tailwind
+}
+
+export interface ChangeLive extends LiveActions {
+  figmaLabel?: string; // tile label for the target side; defaults to "FIGMA"
+  figma: string; // what the design / goal says
+  site: string; // what the page has now
 }
 
 export interface Report {

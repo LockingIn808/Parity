@@ -121,3 +121,38 @@ test("askGemini sends context as data and returns plain text, skipping thoughts"
     else process.env.GEMINI_API_KEY = saved;
   }
 });
+
+const { comparePage } = require("../src/compare");
+
+test("page score: one-to-one matching, unmatched elements left out, worst first", () => {
+  const nodes = [
+    { id: "0:1", name: "Home", type: "FRAME", visible: true, width: 1440, height: 900, background: "#FFFFFF" },
+    { id: "1:1", parent_id: "0:1", name: "Title", type: "TEXT", text: "Welcome to Parity", visible: true, width: 400, height: 40, font_family: "Inter", font_size: 32, font_weight: 700, color: "#111827" },
+    { id: "1:2", parent_id: "0:1", name: "Link", type: "TEXT", text: "Learn more", visible: true, width: 80, height: 20, font_family: "Inter", font_size: 14, font_weight: 500, color: "#5A32C6" },
+    buttonFrame, buttonText,
+  ];
+  const el = (tag, text, extra = {}) => ({ tag, selector: `${tag}.x`, text, parityId: `${tag}-${text}`, fontFamily: "Inter", fontWeight: 400, background: "#FFFFFF", padding: 0, gap: 0, ...extra });
+  const elements = [
+    el("h1", "Welcome to Parity", { fontSize: 32, fontWeight: 700, color: "#111827", width: 400, height: 40 }), // perfect
+    el("a", "Learn more", { fontSize: 12, color: "#000000", width: 70, height: 18 }),                          // off
+    el("a", "Learn more", { fontSize: 14, color: "#5A32C6", width: 80, height: 20, parityId: "dupe" }),        // same text: only one may claim the layer
+    el("p", "Totally unrelated footer text", { fontSize: 12, color: "#333333", width: 300, height: 16 }),      // no Figma match
+    domButton,
+  ];
+  const result = compareElement && comparePage({ elements, nodes });
+  assert.equal(result.scanned, 5);
+  assert.equal(result.compared, 3, "h1, one 'Learn more' link, button");
+  assert.ok(!result.elements.some((e) => e.text === "Totally unrelated footer text"));
+  assert.equal(result.elements.filter((e) => e.text === "Learn more").length, 1);
+  assert.equal(result.elements.find((e) => e.text === "Learn more").parity_id, "dupe", "the closer match wins the layer");
+  const scores = result.elements.map((e) => e.score);
+  assert.deepEqual(scores, [...scores].sort((a, b) => a - b), "worst first");
+  assert.equal(result.page_score, Math.round(scores.reduce((a, b) => a + b, 0) / scores.length));
+  assert.ok(result.categories.length > 0 && result.categories.every((c) => c.fraction === null || (c.fraction >= 0 && c.fraction <= 1)));
+});
+
+test("page score with nothing matching reports null, not 0", () => {
+  const result = comparePage({ elements: [{ tag: "p", text: "zzz", width: 5, height: 5 }], nodes: [buttonFrame, buttonText] });
+  assert.equal(result.page_score, null);
+  assert.equal(result.compared, 0);
+});

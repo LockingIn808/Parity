@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PillButton from "../components/PillButton";
 import ScoreBreakdown, { type CardData } from "../components/ScoreBreakdown";
-import type { ElementSnapshot } from "../lib/inspect";
-import { scoreAccessibility, type PartResult, type ScoreResult } from "../lib/score";
-import DesignResult from "../components/DesignResult";
 import AskBox from "../components/AskBox";
+import { ActionLinks } from "../components/LiveBits";
+import { collectById, type ElementSnapshot } from "../lib/inspect";
+import { evalInPage, inDevtools } from "../lib/devtools";
+import { finish, scoreAccessibility, type PartResult, type ScoreResult } from "../lib/score";
+import { compareElement, type CompareResult } from "../lib/api";
+import { cssRule, designElementParts, fixesForPart } from "../lib/reports";
 import { useAsk } from "../hooks/useAsk";
+import type { LiveDesign } from "../hooks/useLiveDesign";
+import type { LiveActions } from "../types/design";
 
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
@@ -50,18 +55,47 @@ function Tile({ label, text, site }: { label: string; text: string; site?: boole
   );
 }
 
-/** Same look as "Changes to Prioritize": icon tile, title, one-line subtitle, Preview + Commit. */
-function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string }) {
+/**
+ * Same look as "Changes to Prioritize": icon tile, title, one-line subtitle, Preview + Commit.
+ * With `live` for a part, Preview also shows the change on the page and Commit saves it to GitHub
+ * (then reads Revert). Without it, Commit is the original local checkmark.
+ */
+function Findings({
+  parts,
+  goalLabel,
+  live,
+}: {
+  parts: PartResult[];
+  goalLabel: string;
+  live?: Record<string, LiveActions>;
+}) {
   const [open, setOpen] = useState<string | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
 
-  // Local checklist only: nothing is written to code or GitHub.
+  // Leaving the view takes an open preview off the page.
+  const openRef = useRef({ open, live });
+  openRef.current = { open, live };
+  useEffect(
+    () => () => {
+      const { open: id, live: actions } = openRef.current;
+      if (id) actions?.[id]?.preview?.(false);
+    },
+    []
+  );
+
   const toggleDone = (id: string) =>
     setDone((s) => {
       const n = new Set(s);
       if (!n.delete(id)) n.add(id);
       return n;
     });
+
+  const togglePreview = (id: string) => {
+    if (open) live?.[open]?.preview?.(false);
+    const next = open === id ? null : id;
+    if (next) live?.[next]?.preview?.(true);
+    setOpen(next);
+  };
 
   const rows = [...parts].filter((p) => rank(p) < 2).sort((a, b) => rank(a) - rank(b));
   const skipped = parts.filter((p) => rank(p) === 2).map((p) => p.name);
@@ -77,7 +111,9 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
           const fix = rank(p) === 0;
           const ink = luma(p.color) > 0.6 ? "#3A1F78" : "#fff";
           const isOpen = open === p.id;
-          const isDone = done.has(p.id);
+          const actions = live?.[p.id];
+          const real = Boolean(actions?.commit);
+          const isDone = real ? Boolean(actions?.committed) : done.has(p.id);
           return (
             <li key={p.id} className="border-t border-[var(--line)] first:border-t-0">
               <div className="flex items-center gap-2.5 py-1.5">
@@ -98,17 +134,20 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
                 <PillButton
                   variant={isOpen ? "ghostOn" : "ghost"}
                   aria-expanded={isOpen}
-                  onClick={() => setOpen(isOpen ? null : p.id)}
+                  onClick={() => togglePreview(p.id)}
                 >
                   Preview
                 </PillButton>
                 {fix ? (
                   <PillButton
                     variant={isDone ? "soft" : "primary"}
-                    onClick={() => toggleDone(p.id)}
+                    disabled={actions?.busy}
+                    onClick={() =>
+                      real ? (isDone ? actions?.revert?.() : actions?.commit?.()) : toggleDone(p.id)
+                    }
                     className="sm:min-w-[84px]"
                   >
-                    {isDone ? "Done ✓" : "Mark done"}
+                    {isDone ? (real ? "Revert" : "Committed ✓") : "Commit"}
                   </PillButton>
                 ) : (
                   <span className="rounded-full bg-[var(--badge-bg)] px-2.5 py-0.5 text-center text-xs font-semibold text-[var(--badge-text)] sm:min-w-[84px]">
@@ -117,10 +156,13 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
                 )}
               </div>
               {isOpen && (
-                <div className="flex gap-2 pb-2">
-                  <Tile label={goalLabel} text={p.goal} />
-                  <Tile label="YOUR SITE" text={p.site} site />
-                </div>
+                <>
+                  <div className="flex gap-2 pb-2">
+                    <Tile label={goalLabel} text={p.goal} />
+                    <Tile label="YOUR SITE" text={p.site} site />
+                  </div>
+                  {actions && <ActionLinks live={actions} />}
+                </>
               )}
             </li>
           );
@@ -135,33 +177,161 @@ function Findings({ parts, goalLabel }: { parts: PartResult[]; goalLabel: string
   );
 }
 
+/** Design tab for one element: compared with its matching Figma layer by the backend. */
+function DesignElement({
+  el,
+  projectId,
+  live,
+  onScored,
+  onLayer,
+}: {
+  el: ElementSnapshot;
+  projectId: number;
+  live: LiveDesign;
+  onScored?: (score: number) => void;
+  onLayer: (name: string) => void;
+}) {
+  const [result, setResult] = useState<CompareResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [nodeId, setNodeId] = useState<string | null>(null); // pinned after the first match
+
+  const ai = useAsk(() => ({
+    kind: "design comparison against Figma",
+    element: { tag: el.tag, selector: el.selector, text: el.text },
+    figma_layer: result ? `${result.matched_node.name} (${result.matched_node.type})` : null,
+    frame: result?.project.frame_name ?? null,
+    design_score_percent: result?.design_score ?? null,
+    categories: (result?.categories ?? []).map((c) => ({
+      name: c.name,
+      match_percent: c.fraction === null ? null : Math.round(c.fraction * 100),
+      site: c.current,
+      figma: c.expected,
+    })),
+    differences: (result?.suggested_fixes ?? []).map((f) => ({ property: f.css_property, site: f.current, figma: f.expected })),
+  }));
+
+  const compare = useCallback(
+    async (snap: ElementSnapshot, pinned: string | null) => {
+      try {
+        const next = await compareElement(projectId, snap, pinned);
+        setResult(next);
+        setError(null);
+        setNodeId(next.matched_node.id);
+        onLayer(next.matched_node.name || next.matched_node.id);
+        onScored?.(next.design_score);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "The comparison failed.");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId]
+  );
+
+  useEffect(() => {
+    void compare(el, null);
+  }, [compare, el]);
+
+  // After a preview changes the element, read it again so the score reflects what's on screen.
+  const rescore = async () => {
+    if (!inDevtools()) return;
+    const fresh = await evalInPage<ElementSnapshot | null>(collectById(el.parityId)).catch(() => null);
+    if (fresh) await compare(fresh, nodeId);
+  };
+
+  if (error && !result) {
+    return (
+      <section className={card}>
+        <p role="alert" className="text-xs font-semibold text-[var(--err)]">
+          {error}
+        </p>
+        <PillButton className="mt-2" onClick={() => void compare(el, nodeId)}>
+          Try again
+        </PillButton>
+      </section>
+    );
+  }
+
+  if (!result) {
+    return (
+      <section className={card}>
+        <p className="text-xs text-[var(--muted)]">Comparing this element with your Figma design…</p>
+      </section>
+    );
+  }
+
+  const parts = designElementParts(result);
+  const actions: Record<string, LiveActions> = {};
+  for (const part of parts) {
+    const { refs, fixes } = fixesForPart(result, el.selector, part.id);
+    if (refs.length === 0) continue;
+    actions[part.id] = {
+      committed: live.isCommitted(refs),
+      busy: live.busy,
+      preview: (on) => void live.preview(el.parityId, refs, on).then(rescore),
+      commit: () => live.commit(refs),
+      revert: () => live.revert(refs),
+      why: () =>
+        void ai.ask(
+          `Explain the ${part.name.toLowerCase()} differences (${part.fix}) and whether they are safe to change.`
+        ),
+      css: cssRule(el.selector, refs),
+      tailwind: fixes.flatMap((f) => f.tailwind ?? []).join(" ") || undefined,
+    };
+  }
+
+  return (
+    <>
+      <ScoreBreakdown card={toCard("Design Score", finish(parts), "Similar")} />
+      <Findings parts={parts} goalLabel="FIGMA" live={actions} />
+      <AskBox items={ai.items} busy={ai.busy} onAsk={(q) => void ai.ask(q)} placeholder="Ask about design differences..." />
+    </>
+  );
+}
+
+function AccessibilityElement({ el }: { el: ElementSnapshot }) {
+  const result = scoreAccessibility(el);
+  const ai = useAsk(() => ({
+    kind: "accessibility check",
+    element: { tag: el.tag, selector: el.selector, role: el.role, accessible_name: el.name, text: el.text },
+    accessibility_score_percent: result.total,
+    checks: result.parts.map((p) => ({
+      name: p.name,
+      pass_percent: p.fraction === null ? null : Math.round(p.fraction * 100),
+      note: p.note,
+      fix: p.fix || null,
+      site: p.site,
+      goal: p.goal,
+    })),
+  }));
+
+  return (
+    <>
+      <ScoreBreakdown card={toCard("Accessibility Score", result, "Accessible")} />
+      {result.checked === 0 && (
+        <p className="px-1 text-[11px] text-[var(--muted)]">
+          This element has no text, image or control to check, so only the page-level check ran.
+          Select a button, link, image or piece of text to see a real score.
+        </p>
+      )}
+      <Findings parts={result.parts} goalLabel="GOAL" />
+      <AskBox items={ai.items} busy={ai.busy} onAsk={(q) => void ai.ask(q)} placeholder="Ask about accessibility issues..." />
+    </>
+  );
+}
+
 interface Props {
   el: ElementSnapshot;
   tab: "design" | "accessibility";
   projectId: number | null; // connected Figma project (null = not connected yet)
+  live: LiveDesign;
   onGoFigma: () => void;
   onBack: () => void;
   onScored?: (score: number) => void;
 }
 
-export default function ElementScore({ el, tab, projectId, onGoFigma, onBack, onScored }: Props) {
+export default function ElementScore({ el, tab, projectId, live, onGoFigma, onBack, onScored }: Props) {
   const isDesign = tab === "design";
-  const result = isDesign ? null : scoreAccessibility(el);
-
-  const ai = useAsk(() => ({
-    kind: "accessibility check (computed locally from the element's styles and attributes)",
-    element: { tag: el.tag, selector: el.selector, role: el.role, accessible_name: el.name, text: el.text },
-    accessibility_score_percent: result?.total ?? null,
-    checks: (result?.parts ?? []).map((p) => ({
-      name: p.name,
-      applies: p.fraction !== null,
-      pass_percent: p.fraction === null ? null : Math.round(p.fraction * 100),
-      note: p.note,
-      suggested_fix: p.fix || null,
-      site_now: p.site,
-      goal: p.goal,
-    })),
-  }));
+  const [layer, setLayer] = useState<string | null>(null);
 
   return (
     <div className="space-y-3">
@@ -178,21 +348,31 @@ export default function ElementScore({ el, tab, projectId, onGoFigma, onBack, on
           <span className="rounded-lg bg-[var(--card-tint)] px-2 py-1 font-mono text-[11px] font-bold text-[var(--p1)]">
             &lt;{el.tag}&gt;
           </span>
+
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-bold">{el.selector}</p>
             <p className="truncate text-[11px] text-[var(--muted)]">{el.text || el.name || "No text"}</p>
           </div>
+
+          {isDesign && layer && (
+            <span
+              className="max-w-[45%] flex-none truncate rounded-full bg-[#FFF1DC] px-2 py-[2px] text-[10px] font-bold text-[#8A5200]"
+              title={`Compared with the Figma layer “${layer}”`}
+            >
+              Figma: {layer}
+            </span>
+          )}
         </div>
       </section>
 
       {isDesign ? (
         projectId ? (
-          <DesignResult projectId={projectId} element={el} onScored={onScored} />
+          <DesignElement el={el} projectId={projectId} live={live} onScored={onScored} onLayer={setLayer} />
         ) : (
           <section className={card}>
-            <p className="text-xs font-semibold text-[var(--ink)]">No Figma frame selected yet</p>
+            <p className="text-xs font-semibold text-[var(--ink)]">Connect a Figma design first</p>
             <p className="mt-1 text-[11px] text-[var(--muted)]">
-              Connect a Figma file and choose a frame, then select this element again to compare it.
+              Paste your Figma link and choose a frame, then select this element again.
             </p>
             <PillButton className="mt-2" onClick={onGoFigma}>
               Go to Figma Link
@@ -200,25 +380,7 @@ export default function ElementScore({ el, tab, projectId, onGoFigma, onBack, on
           </section>
         )
       ) : (
-        result && (
-          <>
-            <ScoreBreakdown card={toCard("Accessibility Score", result, "Accessible")} />
-            {result.checked === 0 && (
-              <p className="px-1 text-[11px] text-[var(--muted)]">
-                This element has no text, image or control to check, so only the page-level check ran.
-                Select a button, link, image or piece of text to see a real score.
-              </p>
-            )}
-            <Findings key={tab} parts={result.parts} goalLabel="GOAL" />
-            <AskBox
-              items={ai.items}
-              busy={ai.busy}
-              onAsk={(q) => void ai.ask(q)}
-              explainQuestion="Explain these accessibility results in plain words: what is wrong, who it affects, and what to fix first?"
-              placeholder="Ask about accessibility issues…"
-            />
-          </>
-        )
+        <AccessibilityElement el={el} />
       )}
     </div>
   );

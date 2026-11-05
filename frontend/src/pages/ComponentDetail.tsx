@@ -1,15 +1,15 @@
 import ScoreBreakdown, { partCard } from "../components/ScoreBreakdown";
 import ChangesList from "../components/ChangesList";
-import { reports } from "../data/changes";
+import type { Report } from "../types/design";
 
 interface Props {
-  report: "design" | "accessibility";
+  report: Report; // the real report shown on the overview
   partId: string;
   onBack: () => void;
 }
 
 export default function ComponentDetail({ report, partId, onBack }: Props) {
-  const r = reports[report];
+  const r = report;
   const part = r.parts.find((p) => p.id === partId);
   if (!part) return null;
   return (

@@ -1,6 +1,7 @@
 import type { Change, Part } from "../types/design";
 import PillButton from "./PillButton";
 import PreviewSample from "./PreviewSample";
+import { ActionLinks, ValueTile } from "./LiveBits";
 
 const luma = (hex: string) => {
   const n = parseInt(hex.slice(1), 16);
@@ -38,11 +39,25 @@ export default function ChangeItem({ change, part, subtitle, open, done, onPrevi
         <PillButton variant={open ? "ghostOn" : "ghost"} aria-expanded={open} onClick={onPreview}>
           Preview
         </PillButton>
-        <PillButton variant={done ? "soft" : "primary"} onClick={onCommit} className="sm:min-w-[84px]">
-          {done ? "Committed ✓" : "Commit"}
+        <PillButton
+          variant={done ? "soft" : "primary"}
+          onClick={onCommit}
+          disabled={change.live?.busy}
+          className="sm:min-w-[84px]"
+        >
+          {done ? (change.live?.revert ? "Revert" : "Committed ✓") : "Commit"}
         </PillButton>
       </div>
-      {open && (
+      {open && change.live && (
+        <>
+          <div className="flex gap-2 pb-2">
+            <ValueTile label={change.live.figmaLabel ?? "FIGMA"} text={change.live.figma} />
+            <ValueTile label="YOUR SITE" text={change.live.site} site />
+          </div>
+          <ActionLinks live={change.live} />
+        </>
+      )}
+      {open && !change.live && (
         <div className="flex gap-2 pb-2">
           <PreviewSample partId={part.id} />
         </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const { randomUUID, createHash } = require('node:crypto');
 const { cssFor } = require('./fixes');
 const { github, repoPath, readFile } = require('./github');
+const { commitFix } = require('./live');
 const router = express.Router();
 const plans = new Map(); // Restarting the backend discards uncommitted plans.
 const fingerprint = token => createHash('sha256').update(token).digest('hex');
@@ -77,5 +78,9 @@ router.post('/commit', wrap(async (req, res, token) => {
     plan.state = 'uncertain';
     throw new Error(`${error.message}. Check branch parity/${plan.id} on GitHub before preparing another commit.`);
   }
+}));
+// Panel Commit / Revert: one fix at a time onto the parity/fixes branch (see live.js).
+router.post('/fix', wrap(async (req, res, token) => {
+  res.json(await commitFix(token, req.body || {}));
 }));
 module.exports = router;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Change, Part } from "../types/design";
 import ChangeItem from "./ChangeItem";
 
@@ -12,7 +12,33 @@ export default function ChangesList({ changes, parts, sub = "priority" }: Props)
   const [openId, setOpenId] = useState<string | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
 
-  // TODO(real data): Commit should apply the change (write to code, open a PR) and persist.
+  // Rows with live data preview on the page while open and commit to GitHub; others keep the local toggle.
+  const openRef = useRef<{ id: string | null; changes: Change[] }>({ id: null, changes });
+  openRef.current = { id: openId, changes };
+  useEffect(
+    () => () => {
+      const { id, changes: list } = openRef.current;
+      list.find((c) => c.id === id)?.live?.preview?.(false);
+    },
+    []
+  );
+
+  const togglePreview = (c: Change) => {
+    if (openId) changes.find((x) => x.id === openId)?.live?.preview?.(false);
+    const next = openId === c.id ? null : c.id;
+    if (next) c.live?.preview?.(true);
+    setOpenId(next);
+  };
+
+  const commit = (c: Change) => {
+    if (c.live?.commit) {
+      if (c.live.committed) c.live.revert?.();
+      else c.live.commit();
+      return;
+    }
+    toggleDone(c.id);
+  };
+
   const toggleDone = (id: string) =>
     setDone((s) => {
       const n = new Set(s);
@@ -37,9 +63,9 @@ export default function ChangesList({ changes, parts, sub = "priority" }: Props)
               part={part}
               subtitle={sub === "fix" ? part.fixLabel : c.priority}
               open={openId === c.id}
-              done={done.has(c.id)}
-              onPreview={() => setOpenId(openId === c.id ? null : c.id)}
-              onCommit={() => toggleDone(c.id)}
+              done={c.live?.commit ? Boolean(c.live.committed) : done.has(c.id)}
+              onPreview={() => togglePreview(c)}
+              onCommit={() => commit(c)}
             />
           ))}
         </ul>

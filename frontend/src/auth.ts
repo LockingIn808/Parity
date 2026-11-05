@@ -1,4 +1,5 @@
 import { requireSupabase } from "./supabase";
+import { setGithubToken } from "./lib/githubToken";
 
 const REDIRECT_PATH = "supabase-auth";
 
@@ -42,7 +43,8 @@ export async function signInWithGitHub() {
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "github",
-    options: { redirectTo: redirectUrl(), skipBrowserRedirect: true },
+    // "repo" lets Parity commit fixes to a branch of a repository you choose (Commit / Revert).
+    options: { redirectTo: redirectUrl(), skipBrowserRedirect: true, scopes: "repo" },
   });
 
   if (error) throw error;
@@ -61,10 +63,12 @@ export async function signInWithGitHub() {
     await supabase.auth.exchangeCodeForSession(code);
   if (sessionError) throw sessionError;
 
+  await setGithubToken(sessionData.session?.provider_token ?? null);
   return sessionData.session;
 }
 
 export async function signOut() {
+  await setGithubToken(null);
   const { error } = await requireSupabase().auth.signOut();
   if (error) throw error;
 }

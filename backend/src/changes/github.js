@@ -5,7 +5,12 @@ async function github(token, path, method = 'GET', body) {
       'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20000)
   });
-  if (!response.ok) throw new Error(`GitHub request failed (${response.status})`);
+  if (!response.ok) {
+    const hints = { 401: ' - sign in to GitHub again', 403: ' - no permission (the repo or org may need to approve Parity)', 404: ' - not found, or no access' };
+    const error = new Error(`GitHub request failed (${response.status})${hints[response.status] || ''}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.status === 204 ? null : response.json();
 }
 function repoPath(owner, repo) {

@@ -71,7 +71,7 @@ const part = (
  * Slice percentages use the largest-remainder method, so they always add up to the
  * rounded total (a perfect element is exactly 100%, never 99% with a stray "To go 1%").
  */
-function finish(parts: PartResult[]): ScoreResult {
+export function finish(parts: PartResult[]): ScoreResult {
   const live = parts.filter((p) => p.fraction !== null);
   const W = live.reduce((n, p) => n + p.weight, 0) || 1;
   const exact = live.map((p) => (((p.fraction ?? 0) * p.weight) / W) * 100);
@@ -281,4 +281,55 @@ export function scoreDesign(s: ElementSnapshot, spec: DesignSpec): ScoreResult {
     : part("sizing", "Sizing", C[3], 25, null, "No size in the Figma data.");
 
   return finish([fonts, color, spacing, sizing]);
+}
+/* ---------- Whole-page accessibility ---------- */
+
+export interface PageIssue {
+  snap: ElementSnapshot;
+  score: number;
+  problems: { id: string; name: string; fix: string; site: string; goal: string; fraction: number }[]; // checks this element doesn't fully pass
+}
+
+export interface PageAccessibility {
+  result: ScoreResult; // averaged over the scanned elements
+  checked: number; // elements that had at least one applicable check
+  issues: PageIssue[]; // worst first, only elements with problems
+}
+
+/** Runs the same per-element checks on every scanned element and averages each check. */
+export function scoreAccessibilityPage(snaps: ElementSnapshot[]): PageAccessibility {
+  const scored = snaps.map((snap) => ({ snap, result: scoreAccessibility(snap) }));
+  const relevant = scored.filter((s) => s.result.checked > 0);
+  const template = scored[0]?.result.parts ?? [];
+
+  const parts: PartResult[] = template.map((part) => {
+    const values = relevant
+      .map((s) => s.result.parts.find((p) => p.id === part.id)?.fraction)
+      .filter((f): f is number => typeof f === "number");
+    const failing = relevant.filter((s) => {
+      const f = s.result.parts.find((p) => p.id === part.id)?.fraction;
+      return typeof f === "number" && f < 0.999;
+    }).length;
+    return {
+      ...part,
+      fraction: values.length ? values.reduce((n, v) => n + v, 0) / values.length : null,
+      note: values.length ? `${values.length - failing} of ${values.length} elements pass` : "Not checked on this page",
+      fix: failing ? `${failing} element${failing === 1 ? "" : "s"} need attention: open them below.` : "",
+      site: "",
+      goal: "",
+    };
+  });
+
+  const issues: PageIssue[] = relevant
+    .map(({ snap, result }) => ({
+      snap,
+      score: result.total,
+      problems: result.parts
+        .filter((p) => p.id !== "other" && p.fraction !== null && p.fraction < 0.999)
+        .map((p) => ({ id: p.id, name: p.name, fix: p.fix, site: p.site, goal: p.goal, fraction: p.fraction as number })),
+    }))
+    .filter((issue) => issue.problems.length > 0)
+    .sort((a, b) => a.score - b.score);
+
+  return { result: finish(parts), checked: relevant.length, issues };
 }

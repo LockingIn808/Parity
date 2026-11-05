@@ -1,4 +1,9 @@
+import ScoreBreakdown, { overviewCard } from "../components/ScoreBreakdown";
+import ChangesList from "../components/ChangesList";
 import PillButton from "../components/PillButton";
+import AskBox from "../components/AskBox";
+import type { Report } from "../types/design";
+import type { QA } from "../hooks/useAsk";
 import type { ElementSnapshot } from "../lib/inspect";
 
 export interface ComparedElement {
@@ -7,67 +12,68 @@ export interface ComparedElement {
   snap: ElementSnapshot;
 }
 
-interface Props {
-  file: string;
-  frame: string;
-  connected: boolean;
-  inDevtools: boolean;
-  recent: ComparedElement[];
-  onOpen: (snap: ElementSnapshot) => void;
-  onGoFigma: () => void;
-}
+export type Loadable<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; error: string }
+  | { status: "done"; data: T };
 
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
-/** Design tab before an element is picked: what is connected and what to do next. */
-export default function DesignComparison({ file, frame, connected, inDevtools, recent, onOpen, onGoFigma }: Props) {
+/** Small card for the states the sample screens never had: not connected, scanning, errors. */
+export function StatusCard({ title, text, action }: { title?: string; text: string; action?: { label: string; onClick: () => void } }) {
+  return (
+    <section className={card}>
+      {title && <p className="text-sm font-semibold text-[var(--ink)]">{title}</p>}
+      <p className={`text-xs text-[var(--muted)] ${title ? "mt-1" : ""}`}>{text}</p>
+      {action && (
+        <PillButton className="mt-3" onClick={action.onClick}>
+          {action.label}
+        </PillButton>
+      )}
+    </section>
+  );
+}
+
+interface Props {
+  report: Loadable<Report>;
+  connected: boolean;
+  onSelect: (partId: string) => void;
+  onGoFigma: () => void;
+  ask: { items: QA[]; busy: boolean; onAsk: (q: string) => void };
+}
+
+/** Design tab overview: the whole page compared with the selected Figma frame. */
+export default function DesignComparison({ report, connected, onSelect, onGoFigma, ask }: Props) {
   if (!connected) {
     return (
-      <section className={card}>
-        <h2 className="text-sm font-semibold text-[var(--ink)]">Connect a Figma frame first</h2>
-        <p className="mt-1 text-xs text-[var(--muted)]">
-          Parity compares the element you inspect with a layer in the Figma frame you choose.
-        </p>
-        <PillButton className="mt-3" onClick={onGoFigma}>
-          Go to Figma Link
-        </PillButton>
-      </section>
+      <StatusCard
+        title="Connect your Figma design"
+        text="Paste your Figma link and choose a frame to see how this page compares."
+        action={{ label: "Go to Figma Link", onClick: onGoFigma }}
+      />
+    );
+  }
+  if (report.status === "idle" || report.status === "loading") {
+    return <StatusCard text="Comparing this page with your Figma design…" />;
+  }
+  if (report.status === "error") {
+    return <StatusCard title="Couldn’t score this page" text={report.error} />;
+  }
+  if (report.data.parts.length === 0) {
+    return (
+      <StatusCard
+        title="Nothing on this page matches the selected frame"
+        text="Parity pairs page elements with Figma layers mostly by their text. Check that this page was built from the frame you chose, or inspect an element to compare it directly."
+      />
     );
   }
 
   return (
     <div className="space-y-3">
-      <section className={card}>
-        <p className="text-[11px] text-[var(--muted)]">Comparing against</p>
-        <p className="truncate text-sm font-semibold text-[var(--ink)]">{frame || "Selected frame"}</p>
-        <p className="truncate text-[11px] text-[var(--muted)]">{file}</p>
-        <p className="mt-3 text-xs text-[var(--ink2)]">
-          {inDevtools
-            ? "Click ⌖ Pick element above, then click any part of the page to compare it with this frame."
-            : "Open this panel inside Chrome DevTools to inspect elements on a page."}
-        </p>
-      </section>
-
-      {recent.length > 0 && (
-        <section className={card}>
-          <h3 className="mb-1 text-sm font-semibold text-[var(--ink)]">Compared this session</h3>
-          <ul>
-            {recent.map((r) => (
-              <li key={r.snap.parityId} className="border-t border-[var(--line)] first:border-t-0">
-                <button
-                  type="button"
-                  onClick={() => onOpen(r.snap)}
-                  title="Open this result again"
-                  className="flex w-full cursor-pointer items-center justify-between py-1.5 text-left text-xs hover:text-[var(--p1)]"
-                >
-                  <span className="truncate font-mono text-[11px]">{r.selector}</span>
-                  <span className="ml-2 font-semibold text-[var(--p1)]">{r.score}% ›</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <ScoreBreakdown card={overviewCard(report.data)} onSelect={onSelect} />
+      <ChangesList changes={report.data.changes} parts={report.data.parts} />
+      <AskBox items={ask.items} busy={ask.busy} onAsk={ask.onAsk} placeholder="Ask about design differences..." />
     </div>
   );
 }

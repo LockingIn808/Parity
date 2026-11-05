@@ -1,5 +1,6 @@
 import { requireSupabase } from "../supabase";
 import type { ElementSnapshot } from "./inspect";
+import { getGithubToken } from "./githubToken";
 
 export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"
@@ -181,5 +182,97 @@ export function askParity(context: object, question: string): Promise<{ answer: 
   return apiRequest<{ answer: string }>("/ai/ask", {
     method: "POST",
     body: JSON.stringify({ context, question }),
+  });
+}
+
+/* ---------- GitHub Commit / Revert ---------- */
+
+export class GithubAccessError extends Error {}
+
+async function githubRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await getGithubToken();
+  if (!token) {
+    throw new GithubAccessError("Parity needs permission to commit to your GitHub repositories.");
+  }
+  const headers = new Headers(init.headers);
+  headers.set("X-GitHub-Token", token);
+  try {
+    return await apiRequest<T>(`/api/github${path}`, { ...init, headers });
+  } catch (error) {
+    if (error instanceof Error && /\(401\)/.test(error.message)) {
+      throw new GithubAccessError("GitHub access expired. Reconnect GitHub to keep committing.");
+    }
+    throw error;
+  }
+}
+
+export interface GithubRepo {
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  canPush: boolean;
+}
+
+export function listGithubRepos(page = 1): Promise<GithubRepo[]> {
+  return githubRequest<GithubRepo[]>(`/repositories?page=${page}`);
+}
+
+export function listRepoFiles(owner: string, repo: string, branch: string): Promise<{ truncated: boolean; files: string[] }> {
+  return githubRequest("/files", { method: "POST", body: JSON.stringify({ owner, repo, branch }) });
+}
+
+/** Where Commit writes: a branch of one repo, plus the app entry file that imports the fixes. */
+export interface CommitTarget {
+  owner: string;
+  repo: string;
+  branch: string; // base branch, e.g. main. Commits go to parity/fixes, never here.
+  entryFile: string; // e.g. src/main.jsx
+}
+
+export interface CommitResult {
+  branch: string;
+  commitSha: string;
+  url?: string;
+  compareUrl: string;
+  unchanged?: boolean;
+}
+
+export function commitFixToGithub(
+  target: CommitTarget,
+  fix: { selector: string; property: string; value: string },
+  action: "add" | "remove"
+): Promise<CommitResult> {
+  return githubRequest<CommitResult>("/fix", {
+    method: "POST",
+    body: JSON.stringify({ ...target, fix, action }),
+  });
+}
+
+/* ---------- Whole-page design score ---------- */
+
+export interface PageElementResult {
+  parity_id: string | null;
+  selector: string;
+  tag: string;
+  text: string | null;
+  score: number;
+  matched_node: { id: string; name: string; type: string };
+  fixes: { property: string; css_property: string; current: string; expected: string; tailwind?: string[] }[];
+  fix_count: number;
+}
+
+export interface PageCompareResult {
+  project: { id: number; file_name: string | null; frame_id: string; frame_name: string | null };
+  page_score: number | null; // null when no element clearly matched a Figma layer
+  scanned: number;
+  compared: number;
+  categories: ComparePart[];
+  elements: PageElementResult[]; // worst first
+}
+
+export function comparePageDesign(projectId: number, elements: ElementSnapshot[]): Promise<PageCompareResult> {
+  return apiRequest<PageCompareResult>("/compare/page", {
+    method: "POST",
+    body: JSON.stringify({ project_id: projectId, elements }),
   });
 }

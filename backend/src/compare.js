@@ -729,7 +729,93 @@ function compareElement({
     };
 }
 
+// Below this, a pairing is a guess (no shared text, only similar size), so the element is left out
+// of the page score rather than compared against an unrelated Figma layer.
+const PAGE_MATCH_MIN = 60;
+
+/**
+ * Whole-page design score: pairs page elements with Figma layers one-to-one (strongest
+ * matches first, so ten paragraphs can't all claim the same text layer), compares each pair
+ * with the same rules as a single element, and averages the results.
+ */
+function comparePage({ elements, nodes }) {
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    throw new Error("The selected Figma frame has no cached nodes");
+  }
+
+  const pairs = [];
+  elements.forEach((element, index) => {
+    for (const node of nodes) {
+      const score = matchScore(element, node);
+      if (score >= PAGE_MATCH_MIN) pairs.push({ index, node, score });
+    }
+  });
+  pairs.sort((a, b) => b.score - a.score);
+
+  const usedElements = new Set();
+  const usedNodes = new Set();
+  const compared = [];
+
+  for (const pair of pairs) {
+    if (usedElements.has(pair.index) || usedNodes.has(pair.node.id)) continue;
+    usedElements.add(pair.index);
+    usedNodes.add(pair.node.id);
+    const element = elements[pair.index];
+    const result = compareElement({ element, nodes, figmaNodeId: pair.node.id });
+    compared.push({
+      parity_id: element.parityId ?? null,
+      selector: element.selector ?? element.tag,
+      tag: element.tag,
+      text: element.text ? String(element.text).slice(0, 80) : null,
+      score: result.design_score,
+      matched_node: { id: result.matched_node.id, name: result.matched_node.name, type: result.matched_node.type },
+      fixes: result.suggested_fixes.slice(0, 3).map((fix) => ({
+        property: fix.property,
+        css_property: fix.css_property,
+        current: fix.current,
+        expected: fix.expected,
+        tailwind: fix.tailwind || [],
+      })),
+      fix_count: result.suggested_fixes.length,
+      categories: result.categories,
+    });
+  }
+
+  // Category averages over the elements where that category applied.
+  const template = compared[0]?.categories ?? [];
+  const categories = template.map((category) => {
+    const values = compared
+      .map((item) => item.categories.find((c) => c.id === category.id)?.fraction)
+      .filter((fraction) => typeof fraction === "number");
+    return {
+      id: category.id,
+      name: category.name,
+      weight: category.weight,
+      fraction: values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : null,
+      current: null,
+      expected: null,
+      fix: "",
+    };
+  });
+
+  const pageScore = compared.length
+    ? Math.round(compared.reduce((sum, item) => sum + item.score, 0) / compared.length)
+    : null;
+
+  return {
+    page_score: pageScore,
+    scanned: elements.length,
+    compared: compared.length,
+    categories,
+    // Worst first: this is the "changes to prioritize" list.
+    elements: compared
+      .map(({ categories: _unused, ...item }) => item)
+      .sort((a, b) => a.score - b.score),
+  };
+}
+
 module.exports = {
+  comparePage,
   designSpecFromNode,
   scoreDesign,
   findBestFigmaNode,

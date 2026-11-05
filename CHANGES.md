@@ -71,3 +71,48 @@ Kept but no longer used by the UI: `lib/spec.ts`, `lib/figma.ts#loadFigmaFile`, 
   **Explain these results**, a **Why?** button on each fix, and an **Ask Parity** box on the Design and Accessibility results.
   Comparisons no longer wait on AI. `/health` reports `ai_configured`.
 - Tests: 19 backend tests pass (new: button frame+text matching, AI request/response handling).
+
+## Update 3
+
+- **Real Commit / Revert to GitHub** per fix: `POST /api/github/fix {owner, repo, branch, entryFile, fix, action: add|remove}`
+  (backend `src/changes/live.js`, built on the existing GitHub helpers). Writes to a `parity/fixes` branch only: one
+  `parity-fixes.css` line per selector+property, imported once from the entry file. Base branch never moves.
+- Sign-in requests the GitHub `repo` scope and keeps the GitHub token in extension storage (cleared on sign-out).
+- Commit settings card (repo you can push to, base branch, entry file), remembered per Figma project.
+- Rows are now **Why? · Preview/Hide · Commit → Revert**; header **Preview all / Hide all**; a link to view changes on GitHub.
+- Bare-tag selectors (e.g. `div`) are refused for Commit so a fix can't restyle the whole site.
+- Clearer Figma match line ("Figma match · found automatically", layer, frame).
+- Tests: 23 backend tests (new fake-GitHub tests for commit, replace, revert, safety checks).
+
+## Update 4 (includes update 3)
+
+- **Whole-page scores** when no element is picked, as the team designed: the panel scans the page (up to 60 visible
+  headings, text, links, buttons, images and form fields) once and uses it for both tabs.
+  - Design: `POST /compare/page {project_id, elements}` pairs elements with Figma layers one-to-one (strongest matches
+    first, match score ≥ 60, so unrelated elements are left out), compares each with the single-element rules and
+    averages them. Returns `page_score` (null when nothing matches), category averages and elements worst-first.
+  - Accessibility: the team's existing per-element checks run on every scanned element and are averaged.
+  - Both show **changes to prioritize**; a row opens that element's full breakdown. **Rescan** button; navigating or
+    reloading the inspected page clears the scan.
+- Replaces the sample-data Accessibility overview (old components kept in the repo, unused).
+- Tests: 30 backend tests (new page-matching tests); scanner and page accessibility checked on a simulated page.
+
+## Update 5: back to the team's original frontend (includes updates 3 and 4)
+
+The panel now uses the team's original screens and components only, with real data plugged into them:
+
+- Overviews: the original `ScoreBreakdown` (click a slice → `ComponentDetail`) + `ChangesList` / `ChangeItem`, fed by
+  real `Report` objects built in `lib/reports.ts` with the original palette, labels and priorities.
+- Element view: the original header card, score card and `Findings` rows (FIGMA / YOUR SITE tiles), built from the
+  backend comparison. The old "Sample Figma data" badge now names the matched Figma layer.
+- Figma Link: the original markup and wording ("Figma History", "Try this" steps), with history from Supabase and the
+  frame picker from the integration branch.
+- The original hint ("Select an element on the page with Chrome's inspect tool…") is back.
+- Real behaviour behind the original buttons, added through optional fields (`Change.live`, `Findings live`) so rows
+  without live data behave exactly as before: **Preview** also shows the change on the page while open; **Commit**
+  saves to GitHub and then reads **Revert**. **✦ Why?**, **Copy CSS**, **Copy Tailwind** sit under an open Preview.
+- The AI is the "✦ Ask about…" bar from the mockup, at the bottom of each view.
+- Removed the extra UI from updates 2–4 that wasn't in the team's design: the Pick element bar, the "By category" /
+  "Live Design Sync" / Code cards, the manual layer chooser, the Rescan button and the session list
+  (`DesignResult.tsx`, `PickBar.tsx`, `PriorityList.tsx`, `PageAccessibility.tsx`, `lib/picker.ts`).
+- Backend unchanged apart from page results now including each fix's Tailwind classes.

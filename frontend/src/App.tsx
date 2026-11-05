@@ -4,8 +4,7 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import { useSelectedElement } from "./hooks/useSelectedElement";
 import { parseFigma } from "./lib/figma";
 import { initialsOf } from "./lib/github";
-import { collectById, type ElementSnapshot } from "./lib/inspect";
-import { evalInPage } from "./lib/devtools";
+import type { ElementSnapshot } from "./lib/inspect";
 import { signInWithGitHub, signOut as signOutAuth } from "./auth";
 import { supabaseConfigError } from "./supabase";
 import {
@@ -21,13 +20,20 @@ import LandingPage from "./components/LandingPage";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ProfileMenu from "./components/ProfileMenu";
 import TabBar from "./components/TabBar";
-import PickBar from "./components/PickBar";
+import CommitSetup from "./components/CommitSetup";
 import GithubLogin from "./pages/GithubLogin";
 import Connecting from "./pages/Connecting";
 import FigmaLink from "./pages/FigmaLink";
-import DesignComparison, { type ComparedElement } from "./pages/DesignComparison";
+import DesignComparison, { type Loadable } from "./pages/DesignComparison";
 import AccessibilityScore from "./pages/AccessibilityScore";
 import ComponentDetail from "./pages/ComponentDetail";
+import { scanPage, type PageScan } from "./lib/scan";
+import { comparePageDesign, type PageCompareResult } from "./lib/api";
+import { scoreAccessibilityPage } from "./lib/score";
+import { accessibilityPageReport, designPageReport } from "./lib/reports";
+import { useLiveDesign } from "./hooks/useLiveDesign";
+import { useAsk } from "./hooks/useAsk";
+import type { Report } from "./types/design";
 import ElementScore from "./pages/ElementScore";
 import Account from "./pages/Account";
 import mark from "./assets/mark.png";
@@ -42,7 +48,6 @@ export default function App() {
   const [theme, setTheme, themeReady] = usePersistentState<Theme>("parity-theme", "light");
   const [screen, setScreen] = useState<Screen>("landing");
   const [tab, setTab] = useState<TabId>("figma");
-  const [detail, setDetail] = useState<string | null>(null); // a Part id, e.g. "contrast"
   const [account, setAccount] = useState(false); // true = the Settings page is showing
   const [element, setElement] = useState<ElementSnapshot | null>(null); // selected on the website
   const [pickCount, setPickCount] = useState(0); // remounts the result when the same element is picked again
@@ -50,9 +55,12 @@ export default function App() {
   const [loaded, setLoaded] = useState(false); // Figma data finished loading
   // The connected Figma project (with its frame list). Kept in memory; session.projectId is what persists.
   const [project, setProject] = useState<FigmaProject | null>(null);
-  const [compared, setCompared] = useState<ComparedElement[]>([]);
+  const [detail, setDetail] = useState<string | null>(null); // a Part id, e.g. "contrast"
   const [booted, setBooted] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // One page scan feeds both overviews; it is refreshed each time an overview opens.
+  const [scan, setScan] = useState<Loadable<PageScan>>({ status: "idle" });
+  const [pageDesign, setPageDesign] = useState<Loadable<PageCompareResult>>({ status: "idle" });
 
   // An element was picked (Pick element button, inspect arrow or Elements panel).
   const showElement = (snap: ElementSnapshot) => {
@@ -68,16 +76,6 @@ export default function App() {
     setTab((t) => (t === "figma" ? "design" : t));
   };
 
-  // Reopen from "Compared this session": re-read it, since previews may have changed it.
-  const reopen = (snap: ElementSnapshot) => {
-    evalInPage<ElementSnapshot | null>(collectById(snap.parityId))
-      .then((fresh) => {
-        if (fresh) showElement(fresh);
-        else setNotice("That element is no longer on the page (the page may have reloaded). Pick it again.");
-      })
-      .catch(() => showElement(snap));
-  };
-
   const inDevtools = useSelectedElement((snap) => {
     if (screen === "app") showElement(snap);
   });
@@ -86,6 +84,51 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  const runScan = () => {
+    setScan({ status: "loading" });
+    setPageDesign({ status: "idle" });
+    scanPage()
+      .then((data) => setScan({ status: "done", data }))
+      .catch((error) => setScan({ status: "error", error: message(error, "Could not scan this page.") }));
+  };
+
+  // Scan whenever an overview opens (first visit, back from an element, back from Figma Link),
+  // so the scores always describe the page as it is now.
+  const pageView = screen === "app" && !account && !element && (tab === "design" || tab === "accessibility");
+  useEffect(() => {
+    if (pageView && inDevtools) runScan();
+  }, [pageView, inDevtools]);
+
+  // Compare the scan with the Figma frame once both exist.
+  useEffect(() => {
+    if (scan.status !== "done" || !session.projectId || pageDesign.status !== "idle") return;
+    if (scan.data.elements.length === 0) {
+      setPageDesign({ status: "error", error: "No visible text, links, buttons or images were found on this page." });
+      return;
+    }
+    setPageDesign({ status: "loading" });
+    comparePageDesign(session.projectId, scan.data.elements)
+      .then((data) => setPageDesign({ status: "done", data }))
+      .catch((error) => setPageDesign({ status: "error", error: message(error, "Could not compare the page with Figma.") }));
+  }, [scan, session.projectId, pageDesign.status]);
+
+  // A different Figma frame means a different page score.
+  useEffect(() => {
+    setPageDesign({ status: "idle" });
+  }, [session.projectId, session.frame]);
+
+  // The inspected page navigated or reloaded: old scans and element handles are gone.
+  useEffect(() => {
+    if (!inDevtools) return;
+    const onNavigated = () => {
+      setScan({ status: "idle" });
+      setPageDesign({ status: "idle" });
+      setElement(null);
+    };
+    chrome.devtools.network.onNavigated.addListener(onNavigated);
+    return () => chrome.devtools.network.onNavigated.removeListener(onNavigated);
+  }, [inDevtools]);
 
   // Returning users skip the landing page and get their last project's frame list back.
   useEffect(() => {
@@ -105,8 +148,8 @@ export default function App() {
 
   const goTab = (t: TabId) => {
     setNotice(null);
-    setTab(t);
     setDetail(null);
+    setTab(t);
     setAccount(false);
     setElement(null);
     setFigmaError(null);
@@ -139,10 +182,8 @@ export default function App() {
     } finally {
       setSession(EMPTY);
       setProject(null);
-      setCompared([]);
       setScreen("landing");
       setTab("figma");
-      setDetail(null);
       setAccount(false);
       setElement(null);
     }
@@ -213,10 +254,50 @@ export default function App() {
     );
   };
 
-  const recordScore = (snap: ElementSnapshot, score: number) =>
-    setCompared((list) =>
-      [{ selector: snap.selector, score, snap }, ...list.filter((x) => x.snap.parityId !== snap.parityId)].slice(0, 8)
-    );
+
+  const live = useLiveDesign();
+
+  const pageAccessibility = scan.status === "done" ? scoreAccessibilityPage(scan.data.elements) : null;
+
+  const designAsk = useAsk(() => ({
+    kind: "whole-page design comparison against Figma",
+    frame: session.frame,
+    page_score_percent: pageDesign.status === "done" ? pageDesign.data.page_score : null,
+    compared_elements: pageDesign.status === "done" ? pageDesign.data.compared : null,
+    scanned_elements: pageDesign.status === "done" ? pageDesign.data.scanned : null,
+    worst_elements: pageDesign.status === "done"
+      ? pageDesign.data.elements.slice(0, 12).map((e) => ({ element: e.selector, text: e.text, score: e.score, differences: e.fixes }))
+      : [],
+  }));
+  const accessibilityAsk = useAsk(() => ({
+    kind: "whole-page accessibility check",
+    score_percent: pageAccessibility?.result.total ?? null,
+    checks: (pageAccessibility?.result.parts ?? []).map((p) => ({ name: p.name, note: p.note })),
+    worst_elements: (pageAccessibility?.issues ?? []).slice(0, 12).map((i) => ({
+      element: i.snap.selector,
+      text: i.snap.text,
+      score: i.score,
+      problems: i.problems.map((p) => `${p.name}: ${p.fix || p.site}`),
+    })),
+  }));
+
+  const designReport: Loadable<Report> =
+    pageDesign.status === "done"
+      ? { status: "done", data: designPageReport(pageDesign.data, live, (q) => void designAsk.ask(q)) }
+      : pageDesign.status === "error"
+        ? pageDesign
+        : scan.status === "error"
+          ? scan
+          : { status: "loading" };
+  const accessibilityReport: Loadable<Report> =
+    scan.status === "done" && pageAccessibility
+      ? { status: "done", data: accessibilityPageReport(pageAccessibility, (q) => void accessibilityAsk.ask(q)) }
+      : scan.status === "error"
+        ? scan
+        : { status: "loading" };
+
+  const shown = tab === "design" ? designReport : accessibilityReport;
+  const detailReport = detail && shown.status === "done" ? shown.data : null;
 
   if (!ready || !themeReady) return null; // wait for saved state so nothing flashes
 
@@ -277,7 +358,6 @@ export default function App() {
             onTheme={setTheme}
             onSettings={() => {
               setAccount(true);
-              setDetail(null);
               setElement(null);
             }}
             onSignOut={signOut}
@@ -286,12 +366,44 @@ export default function App() {
 
         <TabBar tabs={TABS} active={account ? null : tab} onChange={pickTab} />
 
-        {inDevtools && !account && tab !== "figma" && <PickBar onPicked={showElement} />}
+        {/* Tells you how to select an element. Hidden once one is selected. */}
+        {inDevtools && !account && !element && tab !== "figma" && !notice && (
+          <p className="px-1 text-[11px] text-[var(--muted)]">
+            Select an element on the page with Chrome’s inspect tool (the arrow icon at the top left of DevTools),
+            then come back to this tab to see its scores.
+          </p>
+        )}
 
         {notice && !account && tab !== "figma" && (
-          <p role="status" className="rounded-xl bg-[#FFF1DC] px-3 py-2 text-[11px] font-semibold text-[#8A5200]">
+          <p role="status" className="px-1 text-[11px] font-semibold text-[#8A5200]">
             {notice}
           </p>
+        )}
+
+        {live.error && !account && tab !== "figma" && (
+          <p role="alert" className="px-1 text-[11px] font-semibold text-[var(--err)]">
+            {live.error}{" "}
+            <button type="button" className="cursor-pointer underline" onClick={live.clearError}>
+              Dismiss
+            </button>
+          </p>
+        )}
+
+        {live.lastLink && !account && tab !== "figma" && !live.error && (
+          <p className="px-1 text-[11px] text-[var(--muted)]">
+            Commits go to the <b>parity/fixes</b> branch{live.target ? ` of ${live.target.owner}/${live.target.repo}` : ""} ·{" "}
+            <a href={live.lastLink} target="_blank" rel="noreferrer" className="font-bold text-[var(--p1)]">
+              view on GitHub ↗
+            </a>{" "}
+            ·{" "}
+            <button type="button" className="cursor-pointer font-bold text-[var(--p1)]" onClick={live.openSetup}>
+              settings
+            </button>
+          </p>
+        )}
+
+        {live.setupOpen && !account && tab !== "figma" && (
+          <CommitSetup initial={live.target} onSave={live.saveTarget} onCancel={live.cancelSetup} />
         )}
 
         {account ? (
@@ -308,9 +420,9 @@ export default function App() {
             el={element}
             tab={tab === "accessibility" ? "accessibility" : "design"}
             projectId={session.projectId}
+            live={live}
             onGoFigma={() => goTab("figma")}
             onBack={() => setElement(null)}
-            onScored={(score) => recordScore(element, score)}
           />
         ) : tab === "figma" ? (
           <FigmaLink
@@ -321,20 +433,22 @@ export default function App() {
             onSelectFrame={chooseFrame}
             onOpenHistory={openHistory}
           />
-        ) : detail ? (
-          <ComponentDetail report={tab} partId={detail} onBack={() => setDetail(null)} />
+        ) : detailReport ? (
+          <ComponentDetail report={detailReport} partId={detail as string} onBack={() => setDetail(null)} />
         ) : tab === "design" ? (
           <DesignComparison
-            file={session.file}
-            frame={session.frame ?? ""}
+            report={designReport}
             connected={Boolean(session.projectId)}
-            inDevtools={inDevtools}
-            recent={compared}
-            onOpen={reopen}
+            onSelect={setDetail}
             onGoFigma={() => goTab("figma")}
+            ask={{ items: designAsk.items, busy: designAsk.busy, onAsk: (q) => void designAsk.ask(q) }}
           />
         ) : (
-          <AccessibilityScore onSelect={setDetail} />
+          <AccessibilityScore
+            report={accessibilityReport}
+            onSelect={setDetail}
+            ask={{ items: accessibilityAsk.items, busy: accessibilityAsk.busy, onAsk: (q) => void accessibilityAsk.ask(q) }}
+          />
         )}
       </div>
     </div>

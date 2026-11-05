@@ -107,18 +107,29 @@ Use a page you control (for example a local Vite app) plus a Figma file the toke
    - URL with `?node-id=` of a top-level frame: goes straight to the Design tab.
    - Otherwise: the **Select a Figma Frame** list appears → pick one.
 4. **Recent Figma files** now lists the file with its frame and "just now".
-5. Click **⌖ Pick element** in the Parity tab, hover the page (elements get outlined) and click one. Chrome's inspect arrow
-   or the Elements panel also work. Parity shows on the Design tab:
-   - Design Fidelity score and pie chart
-   - "Compared with Figma layer …" → **Change** lets you pick the exact layer by hand
-   - By category: Current vs Figma for Fonts / Color / Spacing / Sizing
-6. **Apply** a fix → the page changes immediately, the row shows PREVIEWING, and the score goes up.
-   **Revert** puts the original back. **Apply all** / **Revert all** work too. Reloading the page clears all previews.
-7. **Code** → CSS and Tailwind for the fixes → **Copy**. "All Figma values" shows the full target style.
-8. **✦ Ask Parity**: click **Explain these results**, click **Why?** on a fix, or type a question. Answers need `GEMINI_API_KEY`.
-9. Accessibility tab with the same element → local accessibility score and its own Ask box.
+5. Open the **Design** tab without selecting an element: the page is scanned and compared with your Figma frame.
+   You get the **Design Similarity Score** (click a slice for that category's detail page) and **Changes to Prioritize**.
+   The **Accessibility** tab does the same for accessibility. The scan refreshes every time you return to an overview.
+   To look at one element, select it with Chrome's inspect tool (the arrow at the top left of DevTools) and come back
+   to the Parity tab: you get that element's score and its **Changes to Prioritize**.
+6. **Preview** on a row opens the FIGMA vs YOUR SITE tiles *and* shows the change on the page while it is open
+   (closing it puts the page back). Under the tiles: **✦ Why?** (AI), **Copy CSS**, **Copy Tailwind**.
+7. **Commit** saves that change to GitHub (first time: pick the repo, base branch and app entry file such as `src/main.jsx`).
+   It goes to a `parity/fixes` branch, never your base branch, as one line in `parity-fixes.css` that the entry file
+   imports. The button then reads **Revert**, which removes it again. "view on GitHub ↗" shows the changes; merge them with a
+   pull request. (Accessibility rows keep the original local Commit checkmark: those fixes usually need HTML changes.)
+8. **✦ Ask about…** bar at the bottom of each view: type a question about the results on screen. Needs `GEMINI_API_KEY`.
+9. Accessibility tab with the same element → its accessibility score, with the same layout.
 10. Go back to Figma Link → click **Open** on an older history entry → it reconnects without re-entering the URL.
 11. Close DevTools and reopen it → you are still signed in and the last project is restored.
+
+### GitHub commit permissions
+
+Sign-in now asks GitHub for **repo** access (needed for Commit). If you signed in before this update, the first Commit
+shows **Connect GitHub**; click it once. Repos owned by an organization (like `acm-projects`) may need an org owner to
+approve the Parity OAuth app: GitHub → the org → Settings → Third-party access. Personal repos work right away.
+The element must have a class or id; Parity refuses to commit a rule for a bare tag like `div`, since that would
+restyle every div.
 
 ## 6. If something fails
 
@@ -127,6 +138,8 @@ Use a page you control (for example a local Vite app) plus a Figma file the toke
 | "Parity isn't configured yet" | `frontend/.env` missing values at build time → fill in, rebuild, reload |
 | "Panel has not been built yet" | Run `npm run build` in `frontend/` |
 | "Could not reach the Parity backend at …" | Backend not running, wrong `VITE_API_BASE_URL`, or Codespaces port not Public |
+| "401" / "Could not reach the Parity backend" after restarting | Codespaces reset port 3000 to Private; set it to Public again |
+| Commit: "GitHub request failed (403)" | The org hasn't approved Parity, or you can't push to that repo |
 | "…Supabase is not configured" (503) | `backend/.env` missing Supabase values → restart backend after fixing |
 | "FIGMA_ACCESS_TOKEN is not configured" | Add the token to `backend/.env`, restart |
 | "Figma rejected the request…" | Token invalid, or the token's Figma account can't open that file |
@@ -138,11 +151,16 @@ Use a page you control (for example a local Vite app) plus a Figma file the toke
 - Matching starts automatic (text, size, font, colour); use **Change** to pick the layer by hand when it guesses wrong.
   A Figma frame with a single text layer inside (a typical button) is compared as one element: box styles from the frame,
   typography from the text.
+- The page scan reads up to 60 visible elements in page order (headings, text, links, buttons, images, form fields).
+  Very long pages are only partly scored; elements without a clear Figma match (mostly by text) are left out of the
+  page design score rather than compared to an unrelated layer.
 - Compared today: font family, size, weight (shown as a fix but, per the existing team test, not counted in the score),
   text colour, background, padding (per side), gap, width, height, border radius. Not yet: line-height,
   letter-spacing, borders, margins.
 - Figma colours ignore fill opacity; gradients/images are not compared.
 - The generated CSS selector is a best guess (tag + up to two classes); check it targets the right element.
 - Tailwind named classes assume a 16px root font size; everything else uses arbitrary values.
-- The Accessibility overview (before picking an element) and its detail pages still show the team's sample data.
-- The GitHub commit routes (`/api/github/*`) from the backend branch are still in the backend but have no UI.
+- The old sample-data screens (`AccessibilityScore`, `ComponentDetail`, `data/changes.ts`) are no longer shown but kept in the repo.
+- Commit writes CSS overrides (with `!important`) for the inspected selector rather than editing your components'
+  own styles. It's a safe, reviewable starting point; teams may later move the values into their real styles.
+- The older review-and-commit routes (`/api/github/plan`, `/commit`) are still in the backend; the panel uses `/api/github/fix`.

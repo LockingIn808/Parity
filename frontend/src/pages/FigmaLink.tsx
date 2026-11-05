@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PillButton from "../components/PillButton";
 import {
-  deleteFigmaProject,
   listFigmaHistory,
   type FigmaFrame,
   type FigmaHistoryItem,
@@ -20,21 +19,11 @@ interface Props {
 const EXAMPLE = "https://www.figma.com/design/Xk29aQ/Homepage-redesign?node-id=0-1";
 const card = "rounded-2xl bg-[var(--card)] p-4 shadow-[0_6px_18px_rgba(91,51,200,.10)]";
 
-function ago(iso?: string) {
-  if (!iso) return "";
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (!Number.isFinite(minutes)) return "";
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
-}
-
 export default function FigmaLink({ url, error, project, onConnect, onSelectFrame, onOpenHistory }: Props) {
   const [value, setValue] = useState(url);
   const [dismissed, setDismissed] = useState(false);
-  const [history, setHistory] = useState<FigmaHistoryItem[] | null>(null);
+  // Figma History now comes from the saved projects (Supabase), so it follows you between machines.
+  const [recents, setRecents] = useState<FigmaHistoryItem[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const showError = Boolean(error) && !dismissed;
@@ -42,14 +31,12 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
   const loadHistory = useCallback(async () => {
     setHistoryError(null);
     try {
-      setHistory(await listFigmaHistory());
+      setRecents(await listFigmaHistory());
     } catch (err) {
-      setHistory(null);
       setHistoryError(err instanceof Error ? err.message : "Could not load your Figma history.");
     }
   }, []);
 
-  // Reload whenever the connected project or frame changes, so new connections appear at the top.
   useEffect(() => {
     void loadHistory();
   }, [loadHistory, project?.id, project?.selected_frame_id]);
@@ -59,13 +46,9 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
     onConnect(value);
   };
 
-  const remove = async (item: FigmaHistoryItem) => {
-    try {
-      await deleteFigmaProject(item.id);
-      setHistory((h) => (h ? h.filter((x) => x.id !== item.id) : h));
-    } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : "Could not remove that file.");
-    }
+  const retry = () => {
+    setDismissed(true);
+    input.current?.focus();
   };
 
   const frames = project?.frames ?? [];
@@ -100,7 +83,7 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
           </p>
         ) : (
           <div className="mt-2 flex justify-between text-[11px] text-[var(--muted)]">
-            <span>The file must be viewable by the Figma account whose token the backend uses.</span>
+            <span>Make sure the Figma URL is public</span>
             {import.meta.env.DEV && (
               <button
                 type="button"
@@ -119,8 +102,7 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
         <button
           type="button"
           onClick={submit}
-          disabled={!value.trim()}
-          className="mt-2 w-full cursor-pointer rounded-lg bg-[linear-gradient(180deg,#6F47DB,#5A32C6)] py-2 text-xs font-semibold text-white disabled:opacity-60"
+          className="mt-2 w-full cursor-pointer rounded-lg bg-[linear-gradient(180deg,#6F47DB,#5A32C6)] py-2 text-xs font-semibold text-white"
         >
           Connect Design
         </button>
@@ -128,13 +110,8 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
 
       {frames.length > 0 && !showError && (
         <section className={card}>
-          <h2 className="text-base font-semibold text-[var(--ink)]">
-            {project?.selected_frame_id ? "Frame" : "Select a Figma Frame"}
-          </h2>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            {project?.file_name ?? "This file"}: choose the screen or frame Parity should compare against.
-          </p>
-
+          <h2 className="text-base font-semibold text-[var(--ink)]">Select a Figma Frame</h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">Choose the screen or frame you want Parity to compare.</p>
           <ul className="scroll mt-2 max-h-44 overflow-y-auto pr-2">
             {frames.map((frame) => {
               const selected = frame.id === project?.selected_frame_id;
@@ -147,18 +124,15 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
                     <p className="truncate text-xs font-semibold text-[var(--ink)]">{frame.name}</p>
                     <p className="truncate text-[10px] text-[var(--muted)]">
                       {frame.page_name} · {frame.type}
-                      {frame.width && frame.height ? ` · ${Math.round(frame.width)}×${Math.round(frame.height)}` : ""}
                     </p>
                   </div>
-                  {selected ? (
-                    <span className="shrink-0 rounded-full bg-[var(--badge-bg)] px-2.5 py-0.5 text-xs font-semibold text-[var(--badge-text)]">
-                      Selected ✓
-                    </span>
-                  ) : (
-                    <PillButton variant="ghost" onClick={() => onSelectFrame(frame)} className="shrink-0 text-xs">
-                      Select
-                    </PillButton>
-                  )}
+                  <PillButton
+                    variant={selected ? "ghostOn" : "ghost"}
+                    onClick={() => !selected && onSelectFrame(frame)}
+                    className="shrink-0 text-xs"
+                  >
+                    {selected ? "Selected ✓" : "Select"}
+                  </PillButton>
                 </li>
               );
             })}
@@ -166,94 +140,67 @@ export default function FigmaLink({ url, error, project, onConnect, onSelectFram
         </section>
       )}
 
-      {showError && (
+      {showError ? (
         <section className={card}>
           <h2 className="text-base font-semibold text-[var(--ink)]">Try this</h2>
           <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs">
-            <li>Check the link is a Figma file link (figma.com/design/… or /file/…).</li>
-            <li>Make sure the Figma account behind the backend’s token can open the file.</li>
-            <li>Check the Parity backend is running and reachable.</li>
+            <li>Open the file in Figma and click Share.</li>
+            <li>Set access to “Anyone with the link can view”.</li>
+            <li>Copy the link and paste it above.</li>
           </ol>
-          <PillButton
-            onClick={() => {
-              setDismissed(true);
-              input.current?.focus();
-            }}
-            className="mt-3 w-full text-xs"
-          >
-            Try again
-          </PillButton>
+          <div className="mt-3 flex gap-2">
+            <PillButton onClick={retry} className="flex-1 text-xs">
+              Try again
+            </PillButton>
+            <PillButton variant="ghost" onClick={retry} className="flex-1 text-xs">
+              Back to Figma history
+            </PillButton>
+          </div>
         </section>
-      )}
-
-      <section className={card}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-[var(--ink)]">Recent Figma files</h2>
-          <button
-            type="button"
-            onClick={() => void loadHistory()}
-            className="cursor-pointer text-[11px] font-bold text-[var(--p1)]"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {historyError ? (
-          <div className="pt-2">
-            <p role="alert" className="text-[11px] font-semibold text-[var(--err)]">
-              {historyError}
-            </p>
-          </div>
-        ) : history === null ? (
-          <p className="pt-3 text-center text-xs text-[var(--muted)]">Loading your recent files…</p>
-        ) : history.length === 0 ? (
-          <div className="px-2 pb-1 pt-3 text-center">
-            <p className="text-sm font-semibold text-[var(--ink)]">No files yet</p>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">Files you connect will appear here.</p>
-          </div>
-        ) : (
-          <ul className="scroll mt-2 max-h-48 overflow-y-auto pr-2">
-            {history.map((item) => {
-              const current = item.id === project?.id;
-              return (
+      ) : (
+        <section className={card}>
+          <h2 className="text-base font-semibold text-[var(--ink)]">Figma History</h2>
+          {recents && recents.length > 0 ? (
+            <ul className="scroll mt-2 max-h-28 overflow-y-auto pr-2">
+              {recents.map((r) => (
                 <li
-                  key={item.id}
-                  className="flex items-center justify-between gap-2 border-t border-[var(--line)] py-2 first:border-t-0"
+                  key={r.id}
+                  className="flex items-center justify-between border-t border-[var(--line)] py-2 first:border-t-0"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-medium text-[var(--ink)]">
-                      {item.file_name || item.file_key}
-                    </p>
+                    <p className="truncate text-xs font-medium text-[var(--ink)]">{r.file_name || r.file_key}</p>
                     <p className="truncate text-[11px] text-[var(--muted)]">
-                      {item.selected_frame_name ? `${item.selected_frame_name} · ` : "No frame yet · "}
-                      {ago(item.updated_at)}
+                      {r.file_url.replace(/^https?:\/\/(www\.)?/, "")}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {current ? (
-                      <span className="rounded-full bg-[var(--badge-bg)] px-2.5 py-0.5 text-xs font-semibold text-[var(--badge-text)]">
-                        Open
-                      </span>
-                    ) : (
-                      <PillButton variant="ghost" onClick={() => onOpenHistory(item)} className="py-0.5 text-xs">
-                        Open
-                      </PillButton>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${item.file_name || item.file_key} from history`}
-                      onClick={() => void remove(item)}
-                      className="cursor-pointer px-1 text-sm text-[var(--muted)] hover:text-[var(--err)]"
-                    >
-                      ×
-                    </button>
-                  </div>
+                  <PillButton
+                    variant="ghost"
+                    onClick={() => onOpenHistory(r)}
+                    className="ml-3 shrink-0 py-0.5 text-xs"
+                  >
+                    Open
+                  </PillButton>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-2 pb-1 pt-3 text-center">
+              {historyError ? (
+                <p role="alert" className="text-xs text-[var(--err)]">
+                  {historyError}
+                </p>
+              ) : recents === null ? (
+                <p className="text-xs text-[var(--muted)]">Loading…</p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-[var(--ink)]">No files yet</p>
+                  <p className="mt-0.5 text-xs text-[var(--muted)]">Paste a Figma link above to get started.</p>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

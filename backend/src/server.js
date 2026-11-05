@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const supabase = require("./supabase");
-const { compareElement } = require("./compare");
+const { compareElement, comparePage } = require("./compare");
 const {
   scoreAccessibility,
   getAccessibilityIssues,
@@ -565,6 +565,64 @@ app.post(
     }
   }
 );
+
+// Loads (and caches) the layers of the project's selected frame.
+async function loadFrameNodes(project, userId) {
+  const cached = project.cached_properties || {};
+  if (Array.isArray(cached.nodes) && cached.nodes.length > 0) return cached.nodes;
+
+  const nodeResponse = await fetchFigmaNodes(project.file_key, [project.selected_frame_id]);
+  const fresh = normalizeFetchedNode(nodeResponse, project.selected_frame_id) || {};
+  const nodes = Array.isArray(fresh.nodes) ? fresh.nodes : [];
+  if (nodes.length > 0) {
+    await supabase
+      .from("figma_projects")
+      .update({ cached_properties: fresh, last_fetched_at: new Date().toISOString() })
+      .eq("id", project.id)
+      .eq("user_id", userId);
+  }
+  return nodes;
+}
+
+// Whole-page design score: every scanned element that clearly matches a Figma layer.
+app.post("/compare/page", requireUser, async (req, res) => {
+  const { project_id, elements } = req.body || {};
+
+  if (!Number.isInteger(project_id) || project_id <= 0) {
+    return res.status(400).json({ error: "project_id must be a positive number" });
+  }
+  if (!Array.isArray(elements) || elements.length === 0 || elements.length > 120) {
+    return res.status(400).json({ error: "Send between 1 and 120 page elements." });
+  }
+  if (!elements.every((el) => el && typeof el === "object" && typeof el.tag === "string")) {
+    return res.status(400).json({ error: "Every element needs a tag." });
+  }
+
+  try {
+    const project = await getUserProject(project_id, req.user.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (!project.selected_frame_id) {
+      return res.status(400).json({ error: "Select a Figma frame before scoring the page" });
+    }
+
+    const nodes = await loadFrameNodes(project, req.user.id);
+    if (nodes.length === 0) {
+      return res.status(502).json({ error: "The selected Figma frame has no layers to compare with" });
+    }
+
+    res.json({
+      project: {
+        id: project.id,
+        file_name: project.file_name,
+        frame_id: project.selected_frame_id,
+        frame_name: project.selected_frame_name,
+      },
+      ...comparePage({ elements, nodes }),
+    });
+  } catch (error) {
+    return sendFigmaError(res, error);
+  }
+});
 
 app.post("/compare/element", requireUser, async (req, res) => {
   const validationError = validateCompareBody(req.body);
